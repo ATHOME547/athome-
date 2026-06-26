@@ -342,8 +342,8 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
       <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
         <button id="bdPayBtn" onclick="showPaymentModal()" style="width:100%;padding:13px;border-radius:10px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;background:var(--green);color:#000;border:none;"></button>
         <button id="bdCancelPayBtn" onclick="cancelPayment()" style="display:none;width:100%;padding:12px;border-radius:10px;font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer;background:transparent;border:1.5px solid var(--red);color:var(--red);"><i class="ti ti-arrow-back-up" style="font-size:16px;vertical-align:-2px;"></i> ยกเลิกการชำระ</button>
-        <button style="width:100%;padding:12px;border-radius:10px;font-family:var(--font);font-size:13px;font-weight:700;cursor:not-allowed;opacity:0.5;background:transparent;border:1.5px solid var(--blue);color:var(--blue);"><i class="ti ti-send" style="font-size:16px;vertical-align:-2px;"></i> ส่งใบแจ้งหนี้</button>
-        <button style="width:100%;padding:12px;border-radius:10px;font-family:var(--font);font-size:13px;font-weight:700;cursor:not-allowed;opacity:0.5;background:transparent;border:1.5px solid var(--green);color:var(--green);"><i class="ti ti-send" style="font-size:16px;vertical-align:-2px;"></i> ส่งใบเสร็จ</button>
+        <button id="bdSendInvoice" onclick="sendLineBill('invoice')" style="width:100%;padding:12px;border-radius:10px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;background:transparent;border:1.5px solid var(--blue);color:var(--blue);"><i class="ti ti-send" style="font-size:16px;vertical-align:-2px;"></i> ส่งใบแจ้งหนี้</button>
+        <button id="bdSendReceipt" onclick="sendLineBill('receipt')" style="width:100%;padding:12px;border-radius:10px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;background:transparent;border:1.5px solid var(--green);color:var(--green);"><i class="ti ti-send" style="font-size:16px;vertical-align:-2px;"></i> ส่งใบเสร็จ</button>
       </div>
     </div>
   </div>
@@ -1156,6 +1156,29 @@ async function confirmPayment(){
       renderBillsTable();renderDashboard();
     }else{alert('บันทึกไม่สำเร็จ: '+(res.error||''));}
   }catch(e){alert('เกิดข้อผิดพลาด: '+e.message);}
+}
+
+async function sendLineBill(type){
+  const b=DATA.bills[billDetailIdx];if(!b)return;
+  const code=b['ห้องเลขที่']||'';
+  const month=b['เดือน/ปี']||'';
+  const label=type==='receipt'?'ใบเสร็จ':'ใบแจ้งหนี้';
+  const btnId=type==='receipt'?'bdSendReceipt':'bdSendInvoice';
+  const btn=document.getElementById(btnId);
+  if(btn){btn.innerHTML='<i class="ti ti-loader" style="font-size:16px;vertical-align:-2px;"></i> กำลังส่ง...';btn.disabled=true;}
+  try{
+    const res=await apiPost({sheet:'บิลรายเดือน',action:'send_line',data:{room:code,month:month,type:type}});
+    if(res.success){
+      if(btn)btn.innerHTML='<i class="ti ti-check" style="font-size:16px;vertical-align:-2px;"></i> ส่ง'+label+'แล้ว';
+      setTimeout(()=>{if(btn){btn.innerHTML='<i class="ti ti-send" style="font-size:16px;vertical-align:-2px;"></i> ส่ง'+label;btn.disabled=false;}},2000);
+    }else{
+      alert('ส่งไม่สำเร็จ: '+(res.error||''));
+      if(btn){btn.innerHTML='<i class="ti ti-send" style="font-size:16px;vertical-align:-2px;"></i> ส่ง'+label;btn.disabled=false;}
+    }
+  }catch(e){
+    alert('เกิดข้อผิดพลาด: '+e.message);
+    if(btn){btn.innerHTML='<i class="ti ti-send" style="font-size:16px;vertical-align:-2px;"></i> ส่ง'+label;btn.disabled=false;}
+  }
 }
 
 async function cancelPayment(){
