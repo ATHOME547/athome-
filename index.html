@@ -2274,6 +2274,7 @@ function openEditTenantInfo(){
       ['เบอร์โทร','ei_phone',t['เบอร์โทร']||'','tel'],
       ['เงินมัดจำ','ei_deposit',t['เงินมัดจำ']||'','number'],
       ['ส่วนลดส่วนบุคคล (บาท/เดือน)','ei_discount',t['ส่วนลดส่วนบุคคล']||'','number'],
+      ['LINE User ID','ei_lineid',t['LINE User ID']||'','text'],
       ['หมายเหตุ','ei_note',t['หมายเหตุ']||'','text'],
     ].map(([l,id,v,type])=>`<div style="margin-bottom:12px;">
       <div style="font-size:11px;color:var(--text2);margin-bottom:5px;">${l}</div>
@@ -2294,6 +2295,7 @@ async function saveEditTenantInfo(){
   const phone=document.getElementById('ei_phone').value.trim();
   const deposit=document.getElementById('ei_deposit').value.trim();
   const discount=document.getElementById('ei_discount').value.trim();
+  const lineid=document.getElementById('ei_lineid').value.trim();
   const note=document.getElementById('ei_note').value.trim();
   if(!name){alert('กรุณากรอกชื่อ');return;}
   const rooms=findTenantRooms();
@@ -2301,9 +2303,9 @@ async function saveEditTenantInfo(){
     for(const r of rooms){
       const idx2=DATA.tenants.indexOf(r)+1;
       const res=await apiPost({sheet:'ผู้เช่า',action:'update_row',rowIndex:idx2,data:{
-        'ชื่อ-นามสกุล':name,'เบอร์โทร':phone,'เงินมัดจำ':deposit,'ส่วนลดส่วนบุคคล':discount,'หมายเหตุ':note
+        'ชื่อ-นามสกุล':name,'เบอร์โทร':phone,'เงินมัดจำ':deposit,'ส่วนลดส่วนบุคคล':discount,'LINE User ID':lineid,'หมายเหตุ':note
       }});
-      if(res.success){r['ชื่อ-นามสกุล']=name;r['เบอร์โทร']=phone;r['เงินมัดจำ']=deposit;r['ส่วนลดส่วนบุคคล']=discount;r['หมายเหตุ']=note;}
+      if(res.success){r['ชื่อ-นามสกุล']=name;r['เบอร์โทร']=phone;r['เงินมัดจำ']=deposit;r['ส่วนลดส่วนบุคคล']=discount;r['LINE User ID']=lineid;r['หมายเหตุ']=note;}
     }
     document.getElementById('editInfoModal').remove();
     renderTenantDetail();renderTenants2();
