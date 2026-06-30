@@ -294,7 +294,7 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
     <div class="page-head">
       <div class="page-head-bar">
         <span class="page-head-title"><i class="ti ti-receipt" aria-hidden="true"></i>บิลรายเดือน</span>
-        <button id="billSendAllBtn" style="background:var(--green);color:#000;border:none;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;font-family:var(--font);opacity:0.5;cursor:not-allowed;"><i class="ti ti-send" style="font-size:14px;vertical-align:-2px;"></i> ส่งทั้งหมด</button>
+        <button id="billSendAllBtn" onclick="sendAllUnpaidBills()" style="background:var(--green);color:#000;border:none;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;font-family:var(--font);cursor:pointer;"><i class="ti ti-send" style="font-size:14px;vertical-align:-2px;"></i> ส่งทั้งหมด</button>
       </div>
     </div>
     <div class="month-picker" style="margin-bottom:10px;">
@@ -1216,6 +1216,28 @@ async function sendLineBill(type){
     alert('เกิดข้อผิดพลาด: '+e.message);
     if(btn){btn.innerHTML='<i class="ti ti-send" style="font-size:16px;vertical-align:-2px;"></i> ส่ง'+label;btn.disabled=false;}
   }
+}
+
+async function sendAllUnpaidBills(){
+  const unpaid=getFilteredBills().filter(b=>b['สถานะ']!=='ชำระแล้ว');
+  const btn=document.getElementById('billSendAllBtn');
+  if(!unpaid.length){alert('ไม่มีบิลค้างชำระในเดือนนี้');return;}
+  const roomList=unpaid.map(b=>b['ห้องเลขที่']).join(', ');
+  if(!confirm('ส่งใบแจ้งค่าเช่าให้ห้องที่ค้างชำระ '+unpaid.length+' ห้อง เดือน '+formatMonthFull(billCurrentMonth)+'\n('+roomList+')\n\nยืนยันส่งจริงหรือไม่?'))return;
+  const orig=btn.innerHTML;
+  btn.disabled=true;
+  let sent=0,failed=0;const failRooms=[];
+  for(const b of unpaid){
+    const code=b['ห้องเลขที่']||'';
+    btn.innerHTML='<i class="ti ti-loader" style="font-size:14px;vertical-align:-2px;"></i> กำลังส่ง ('+(sent+failed+1)+'/'+unpaid.length+')';
+    try{
+      const res=await apiPost({sheet:'บิลรายเดือน',action:'send_line',data:{room:code,month:billCurrentMonth,type:'invoice'}});
+      if(res.success)sent++;else{failed++;failRooms.push(code);}
+    }catch(e){failed++;failRooms.push(code);}
+  }
+  btn.innerHTML='<i class="ti ti-check" style="font-size:14px;vertical-align:-2px;"></i> ส่งแล้ว '+sent+'/'+unpaid.length;
+  setTimeout(()=>{btn.innerHTML=orig;btn.disabled=false;},2500);
+  if(failed>0)alert('ส่งสำเร็จ '+sent+' ห้อง ไม่สำเร็จ '+failed+' ห้อง: '+failRooms.join(', '));
 }
 
 async function cancelPayment(){
