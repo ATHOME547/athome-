@@ -1971,22 +1971,16 @@ function renderDashboard(){
   if(el3)el3.textContent='มีผู้เช่า '+occupied+' ห้อง';
   if(el4)el4.textContent='ว่าง '+(total-occupied)+' ห้อง';
 
-  // Revenue — calc from current rates
+  // Revenue — read directly from each bill's saved values, never recomputed from current rates,
+  // so a future rate/discount change never retroactively alters past months' figures.
   let rentTotal=0,waterTotal=0,elecTotal=0,commonTotal=0,parkTotal=0,grandTotal=0;
-  const billMonth=String(dashM).padStart(2,'0')+'/'+dashY;
   bills.forEach(b=>{
-    const code=b['ห้องเลขที่']||'';
-    const t=calcBillTotal(code,billMonth);
-    grandTotal+=t;
-    rentTotal+=getRentByRoom(code);
-    const nc=normCode(code);const pm=calcPrevMonth(billMonth);
-    const cm=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===billMonth);
-    const pmr=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===pm);
-    const rates=getRatesLocal();
-    if(cm&&pmr){waterTotal+=Math.round(calcMeterDiff(parseFloat(cm['หน่วยน้ำ'])||0,parseFloat(pmr['หน่วยน้ำ'])||0)*(parseFloat(rates.r_water)||25));elecTotal+=Math.round(calcMeterDiff(parseFloat(cm['หน่วยไฟ'])||0,parseFloat(pmr['หน่วยไฟ'])||0)*(parseFloat(rates.r_electric)||7));}
-    commonTotal+=parseFloat(rates.r_common)||0;
-    const tenant=DATA.tenants.find(x=>normCode(x['ห้องเลขที่'])===nc&&!x['วันที่ออก']);
-    if(tenant){parkTotal+=(tenant['รถยนต์ล็อก']||'').split(',').filter(Boolean).length*(parseFloat(rates.r_car)||0)+(tenant['จักยานยนต์ล็อก']||'').split(',').filter(Boolean).length*(parseFloat(rates.r_moto)||0);}
+    grandTotal+=fmtN(b['รวม']);
+    rentTotal+=fmtN(b['ค่าเช่า']);
+    waterTotal+=fmtN(b['ค่าน้ำ']);
+    elecTotal+=fmtN(b['ค่าไฟ']);
+    commonTotal+=fmtN(b['ค่าส่วนกลาง']);
+    parkTotal+=fmtN(b['ค่าจอดรถยนต์'])+fmtN(b['ค่าจอดมอเตอร์']);
   });
 
   // Revenue grid 2x3 with Tabler icons
@@ -2024,7 +2018,7 @@ function renderDashboard(){
     rp.innerHTML=paid.length?paid.map(b=>{
       const code=b['ห้องเลขที่']||'';
       const t=DATA.tenants.find(x=>normCode(x['ห้องเลขที่'])===normCode(code)&&!x['วันที่ออก']);
-      const billAmt=calcBillTotal(code,billMonth);
+      const billAmt=fmtN(b['รวม']);
       const payDate=(b['วันที่ชำระ']||'').replace(/\/\d{4}$/,'');
       const payMethod=b['ช่องทางชำระ']||'';
       const payInfo=[payDate,payMethod].filter(Boolean).join(' · ');
@@ -2157,20 +2151,12 @@ function renderDashYear(){
     const bills=getBillsByMonth(mo,dashYearVal);
     let moTotal=0;
     bills.forEach(b=>{
-      const code=b['ห้องเลขที่']||'';
-      const billMonth=String(mo).padStart(2,'0')+'/'+dashYearVal;
-      const t=calcBillTotal(code,billMonth);
-      moTotal+=t;
-      yRent+=getRentByRoom(code);
-      const nc=normCode(code);const pm=calcPrevMonth(billMonth);
-      const cm=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===billMonth);
-      const pmr=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===pm);
-      const rates=getRatesLocal();
-      if(cm&&pmr&&cm['หน่วยน้ำ']!==''&&pmr['หน่วยน้ำ']!=='')yWater+=Math.round(calcMeterDiff(parseFloat(cm['หน่วยน้ำ'])||0,parseFloat(pmr['หน่วยน้ำ'])||0)*(parseFloat(rates.r_water)||25));
-      if(cm&&pmr&&cm['หน่วยไฟ']!==''&&pmr['หน่วยไฟ']!=='')yElec+=Math.round(calcMeterDiff(parseFloat(cm['หน่วยไฟ'])||0,parseFloat(pmr['หน่วยไฟ'])||0)*(parseFloat(rates.r_electric)||7));
-      yCommon+=parseFloat(getRatesLocal().r_common)||0;
-      const tenant=DATA.tenants.find(x=>normCode(x['ห้องเลขที่'])===nc&&!x['วันที่ออก']);
-      if(tenant){const r=getRatesLocal();yPark+=(tenant['รถยนต์ล็อก']||'').split(',').filter(Boolean).length*(parseFloat(r.r_car)||0)+(tenant['จักยานยนต์ล็อก']||'').split(',').filter(Boolean).length*(parseFloat(r.r_moto)||0);}
+      moTotal+=fmtN(b['รวม']);
+      yRent+=fmtN(b['ค่าเช่า']);
+      yWater+=fmtN(b['ค่าน้ำ']);
+      yElec+=fmtN(b['ค่าไฟ']);
+      yCommon+=fmtN(b['ค่าส่วนกลาง']);
+      yPark+=fmtN(b['ค่าจอดรถยนต์'])+fmtN(b['ค่าจอดมอเตอร์']);
     });
     mdata.push(moTotal);yTotal+=moTotal;
   }
@@ -2189,27 +2175,16 @@ function renderDashYear(){
     const meRow=DATA.meter.find(m=>(m['เดือน/ปี']||'')===mKey&&(m['ห้องเลขที่']||'')==='MAIN-E1');
     const mainEUnits=meRow?parseFloat(meRow['หน่วยไฟ']||0):0;
     const mainEAmt=meRow?parseFloat(meRow['ยอดไฟ']||0):0;
+    const billsThisMonth=DATA.bills.filter(b=>(b['เดือน/ปี']||'')===mKey);
     if(mainWUnits>0&&mainWAmt>0){
-      const costPerUnit=mainWAmt/mainWUnits;
-      const rW=parseFloat(getRatesLocal().r_water)||25;
-      const profit=rW-costPerUnit;
-      // tenantWaterAmt for this month (units × rate)
-      const pKey=calcPrevMonth(mKey);
-      const mCur=DATA.meter.filter(m=>(m['เดือน/ปี']||'')===mKey&&!(m['ห้องเลขที่']||'').startsWith('MAIN'));
-      const mPrev=DATA.meter.filter(m=>(m['เดือน/ปี']||'')===pKey&&!(m['ห้องเลขที่']||'').startsWith('MAIN'));
-      let tenantW=0;mCur.forEach(c=>{const p=mPrev.find(x=>normCode(x['ห้องเลขที่'])===normCode(c['ห้องเลขที่']));if(p&&c['หน่วยน้ำ']!==''&&p['หน่วยน้ำ']!=='')tenantW+=calcMeterDiff(parseFloat(c['หน่วยน้ำ'])||0,parseFloat(p['หน่วยน้ำ'])||0);});
-      waterProfitTotal+=Math.round(tenantW*rW)-mainWAmt;
+      // Revenue actually billed to tenants that month (saved value, not a live rate recompute)
+      const tenantWaterRevenue=billsThisMonth.reduce((s,b)=>s+fmtN(b['ค่าน้ำ']),0);
+      waterProfitTotal+=tenantWaterRevenue-mainWAmt;
       hasWaterProfit=true;
     }
     if(mainEUnits>0&&mainEAmt>0){
-      const costPerUnit=mainEAmt/mainEUnits;
-      const rE=parseFloat(getRatesLocal().r_electric)||7;
-      const profit=rE-costPerUnit;
-      const pKey=calcPrevMonth(mKey);
-      const mCur=DATA.meter.filter(m=>(m['เดือน/ปี']||'')===mKey&&!(m['ห้องเลขที่']||'').startsWith('MAIN'));
-      const mPrev=DATA.meter.filter(m=>(m['เดือน/ปี']||'')===pKey&&!(m['ห้องเลขที่']||'').startsWith('MAIN'));
-      let tenantE=0;mCur.forEach(c=>{const p=mPrev.find(x=>normCode(x['ห้องเลขที่'])===normCode(c['ห้องเลขที่']));if(p&&c['หน่วยไฟ']!==''&&p['หน่วยไฟ']!=='')tenantE+=calcMeterDiff(parseFloat(c['หน่วยไฟ'])||0,parseFloat(p['หน่วยไฟ'])||0);});
-      elecProfitTotal+=Math.round(tenantE*rE)-mainEAmt;
+      const tenantElecRevenue=billsThisMonth.reduce((s,b)=>s+fmtN(b['ค่าไฟ']),0);
+      elecProfitTotal+=tenantElecRevenue-mainEAmt;
       hasElecProfit=true;
     }
   }
