@@ -181,9 +181,8 @@ tr:last-child td{border-bottom:none;}
     <div id="loginError" style="font-size:12px;color:var(--red);margin-top:12px;display:none;"></div>
   </div>
 </div>
-
 <script>
-const ALLOWED_EMAILS=['btoatos01@gmail.com','chattarin.kestong@gmail.com'];
+const ALLOWED_EMAILS=['btoatos01@gmail.com'];
 function onGoogleLogin(response){
   const payload=JSON.parse(atob(response.credential.split('.')[1]));
   const email=payload.email;
@@ -295,12 +294,7 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
     <div class="page-head">
       <div class="page-head-bar">
         <span class="page-head-title"><i class="ti ti-receipt" aria-hidden="true"></i>บิลรายเดือน</span>
-        <button id="billSendAllBtn"
-                onclick="sendAllBills()"
-                style="background:var(--green);color:#000;border:none;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;font-family:var(--font);">
-            <i class="ti ti-send" style="font-size:14px;vertical-align:-2px;"></i>
-            ส่งทั้งหมด
-        </button>
+        <button id="billSendAllBtn" style="background:var(--green);color:#000;border:none;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;font-family:var(--font);opacity:0.5;cursor:not-allowed;"><i class="ti ti-send" style="font-size:14px;vertical-align:-2px;"></i> ส่งทั้งหมด</button>
       </div>
     </div>
     <div class="month-picker" style="margin-bottom:10px;">
@@ -2909,36 +2903,6 @@ async function confirmMoveOut(){
 }
 
 
-async function sendAllBills() {
-
-    if (!confirm("ส่งบิลทั้งหมด?")) return;
-
-    const rows = DATA.bills || [];
-
-    for (const bill of rows) {
-        try {
-            await apiPost({
-                sheet: "บิลรายเดือน",
-                action: "send_line",
-                data: {
-                    room: bill["ห้องเลขที่"],
-                    month: bill["เดือน/ปี"],
-                    type: "invoice"
-                }
-            });
-
-            // Optional delay
-            await new Promise(r => setTimeout(r, 300));
-
-        } catch (err) {
-            console.error("Send failed:", bill["ห้องเลขที่"], err);
-        }
-    }
-
-    alert("ส่งทั้งหมดเรียบร้อย");
-}
-
-
 /* ===== TENANTS PAGE V2 ===== */
 let tenantStatus2='current';
 
@@ -3085,7 +3049,7 @@ function atUpdateParkingDisplay(type){
   const col=type==='car'?'var(--blue)':'var(--yellow)';
   if(locks.length>0){
     elD.innerHTML=locks.map(l=>`<span style="background:${bg};color:${col};font-family:var(--mono);font-size:12px;font-weight:700;padding:3px 9px;border-radius:5px;">${l}</span>`).join('');
-    if(elB){elB.textContent='<i class="ti ti-edit" style="font-size:14px;"></i>';elB.style.background='transparent';elB.style.border='none';elB.style.color='var(--text2)';elB.style.padding='2px 4px';}
+    if(elB){elB.innerHTML='<i class="ti ti-edit" style="font-size:14px;"></i>';elB.style.background='transparent';elB.style.border='none';elB.style.color='var(--text2)';elB.style.padding='2px 4px';}
   }else{
     elD.innerHTML='';
     if(elB){elB.textContent='+ เลือกล็อก';elB.style.background='var(--surface2)';elB.style.border='1px solid var(--border2)';elB.style.color='var(--text2)';elB.style.padding='5px 12px';}
