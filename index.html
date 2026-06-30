@@ -275,6 +275,7 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
           <button class="mp-arrow" onclick="changeDashYear(1)">›</button>
         </div>
         <div class="section-title">รายได้รวมทั้งปี</div>
+        <div id="dashYearProfitCard" style="margin-bottom:10px;"></div>
         <div id="yearRevenueGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;"></div>
         <div class="section-title">กราฟรายรับ 12 เดือน</div>
         <div class="chart-card"><div class="chart-wrap"><canvas id="yearChart"></canvas></div></div>
@@ -286,6 +287,10 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
           <div class="chart-wrap"><canvas id="yearOccChart"></canvas></div>
           <div id="yearOccChartFooter" style="display:flex;justify-content:center;gap:12px;font-size:10px;color:var(--text3);margin-top:8px;"></div>
         </div>
+        <div class="section-title" style="display:flex;align-items:center;gap:6px;"><i class="ti ti-wash-machine" style="font-size:16px;color:var(--text2);" aria-hidden="true"></i><span style="color:var(--text2);">รายได้เครื่องซักผ้า 12 เดือน</span></div>
+        <div class="chart-card"><div class="chart-wrap"><canvas id="yearLaundryChart"></canvas></div></div>
+        <div class="section-title" style="display:flex;align-items:center;gap:6px;"><i class="ti ti-glass-full" style="font-size:16px;color:var(--text2);" aria-hidden="true"></i><span style="color:var(--text2);">รายได้ตู้กดน้ำ 12 เดือน</span></div>
+        <div class="chart-card"><div class="chart-wrap"><canvas id="yearVendingChart"></canvas></div></div>
       </div>
     </div>
   </div>
@@ -2198,8 +2203,8 @@ function renderDashYear(){
   if(!dataLoaded)return;
   document.getElementById('dashYearLabel').textContent=dashYearVal;
   const allBills=DATA.bills.filter(b=>{const k=String(b['เดือน/ปี']||b[Object.keys(b)[0]]||'');return k.endsWith('/'+dashYearVal);});
-  let yRent=0,yWater=0,yElec=0,yCommon=0,yPark=0,yTotal=0;
-  const mdata=[];
+  let yRent=0,yWater=0,yElec=0,yCommon=0,yPark=0,yLaundry=0,yVending=0,yTotal=0;
+  const mdata=[],laundryData=[],vendingData=[];
   for(let mo=1;mo<=12;mo++){
     const bills=getBillsByMonth(mo,dashYearVal);
     let moTotal=0;
@@ -2211,12 +2216,19 @@ function renderDashYear(){
       yCommon+=fmtN(b['ค่าส่วนกลาง']);
       yPark+=fmtN(b['ค่าจอดรถยนต์'])+fmtN(b['ค่าจอดมอเตอร์']);
     });
+    const mKey=String(mo).padStart(2,'0')+'/'+dashYearVal;
+    const eiRow=DATA.extraIncome.find(r=>(r['เดือน/ปี']||'')===mKey);
+    const laundryM=eiRow?fmtN(eiRow['เครื่องซักผ้า']):0;
+    const vendingM=eiRow?fmtN(eiRow['กดน้ำ']):0;
+    laundryData.push(laundryM);vendingData.push(vendingM);
+    yLaundry+=laundryM;yVending+=vendingM;
+    moTotal+=laundryM+vendingM;
     mdata.push(moTotal);yTotal+=moTotal;
   }
   const cnt=mdata.filter(x=>x>0).length||1;
   // Calc yearly water/elec profit — exact same as monthly chart profitAmt
-  let waterProfitTotal=0,elecProfitTotal=0;
-  let hasWaterProfit=false,hasElecProfit=false;
+  let waterProfitTotal=0,elecProfitTotal=0,mainCostTotal=0;
+  let hasWaterProfit=false,hasElecProfit=false,hasMainMeterData=false;
   for(let mo=1;mo<=12;mo++){
     const mKey=String(mo).padStart(2,'0')+'/'+dashYearVal;
     const hasBills=DATA.bills.some(b=>(b['เดือน/ปี']||'')===mKey);
@@ -2233,14 +2245,17 @@ function renderDashYear(){
       // Revenue actually billed to tenants that month (saved value, not a live rate recompute)
       const tenantWaterRevenue=billsThisMonth.reduce((s,b)=>s+fmtN(b['ค่าน้ำ']),0);
       waterProfitTotal+=tenantWaterRevenue-mainWAmt;
-      hasWaterProfit=true;
+      mainCostTotal+=mainWAmt;
+      hasWaterProfit=true;hasMainMeterData=true;
     }
     if(mainEUnits>0&&mainEAmt>0){
       const tenantElecRevenue=billsThisMonth.reduce((s,b)=>s+fmtN(b['ค่าไฟ']),0);
       elecProfitTotal+=tenantElecRevenue-mainEAmt;
-      hasElecProfit=true;
+      mainCostTotal+=mainEAmt;
+      hasElecProfit=true;hasMainMeterData=true;
     }
   }
+  const netProfitYear=Math.round(yTotal-mainCostTotal);
   const waterProfit=waterProfitTotal;
   const elecProfit=elecProfitTotal;
   function profitLine(amt,hasData){
@@ -2250,6 +2265,12 @@ function renderDashYear(){
     const label=amt>=0?'กำไร':'ขาดทุน';
     return`<div style="font-size:10px;color:${col};margin-top:4px;display:flex;align-items:center;gap:4px;"><i class="ti ${icon}" style="font-size:12px;"></i>${label} ฿${fmtB(Math.abs(amt))}</div>`;
   }
+  const pcY=document.getElementById('dashYearProfitCard');
+  if(pcY)pcY.innerHTML=hasMainMeterData?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><i class="ti ti-chart-line" style="font-size:16px;color:var(--green);" aria-hidden="true"></i><span style="font-size:11px;color:var(--green);">กำไรสุทธิทั้งปี</span></div>
+      <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:var(--green);">฿${fmtB(netProfitYear)}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px;">รายได้ ฿${fmtB(yTotal)} − ค่าน้ำ-ไฟจ่ายจริง ฿${fmtB(Math.round(mainCostTotal))}</div>
+    </div>`:'';
   const rg=document.getElementById('yearRevenueGrid');
   if(rg)rg.innerHTML=`
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;">
@@ -2278,6 +2299,14 @@ function renderDashYear(){
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><i class="ti ti-parking" style="font-size:16px;color:var(--text2);" aria-hidden="true"></i><span style="font-size:11px;color:var(--text2);">ค่าที่จอด</span></div>
       <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text);">฿${fmtB(yPark)}</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><i class="ti ti-wash-machine" style="font-size:16px;color:var(--text2);" aria-hidden="true"></i><span style="font-size:11px;color:var(--text2);">เครื่องซักผ้า</span></div>
+      <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text);">฿${fmtB(yLaundry)}</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><i class="ti ti-glass-full" style="font-size:16px;color:var(--text2);" aria-hidden="true"></i><span style="font-size:11px;color:var(--text2);">ตู้กดน้ำ</span></div>
+      <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text);">฿${fmtB(yVending)}</div>
     </div>`;
   mkBarChart('yearChart',THAI_MONTHS_DASH,mdata,'#2ecc71');
 
@@ -2319,6 +2348,9 @@ function renderDashYear(){
   const occAvgPct=occWithData.length&&totalRooms?Math.round(occWithData.reduce((a,b)=>a+b,0)/occWithData.length/totalRooms*100):0;
   const occFooter=document.getElementById('yearOccChartFooter');
   if(occFooter)occFooter.innerHTML=`<span>ทั้งหมด ${totalRooms} ห้อง</span><span style="color:var(--green);font-weight:600;">เฉลี่ย ${occAvgPct}%</span>`;
+
+  mkBarChart('yearLaundryChart',THAI_MONTHS_DASH,laundryData,'#8b90b8');
+  mkBarChart('yearVendingChart',THAI_MONTHS_DASH,vendingData,'#8b90b8');
 }
 
 function mkBarChart(id,labels,data,color){
