@@ -277,8 +277,6 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
         <div class="section-title">รายได้รวมทั้งปี</div>
         <div id="dashYearProfitCard" style="margin-bottom:10px;"></div>
         <div id="yearRevenueGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;"></div>
-        <div class="section-title">กราฟรายรับ 12 เดือน</div>
-        <div class="chart-card"><div class="chart-wrap"><canvas id="yearChart"></canvas></div></div>
         <div class="section-title">สถานะเช่าทั้งปี</div>
         <div id="yearOccStats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;"></div>
         <div id="yearOccAvg" style="margin-bottom:10px;"></div>
@@ -287,6 +285,8 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
           <div class="chart-wrap"><canvas id="yearOccChart"></canvas></div>
           <div id="yearOccChartFooter" style="display:flex;justify-content:center;gap:12px;font-size:10px;color:var(--text3);margin-top:8px;"></div>
         </div>
+        <div class="section-title">กราฟรายรับ 12 เดือน</div>
+        <div class="chart-card"><div class="chart-wrap"><canvas id="yearChart"></canvas></div></div>
         <div class="section-title" style="display:flex;align-items:center;gap:6px;"><i class="ti ti-wash-machine" style="font-size:16px;color:var(--text2);" aria-hidden="true"></i><span style="color:var(--text2);">รายได้เครื่องซักผ้า 12 เดือน</span></div>
         <div class="chart-card"><div class="chart-wrap"><canvas id="yearLaundryChart"></canvas></div></div>
         <div class="section-title" style="display:flex;align-items:center;gap:6px;"><i class="ti ti-glass-full" style="font-size:16px;color:var(--text2);" aria-hidden="true"></i><span style="color:var(--text2);">รายได้ตู้กดน้ำ 12 เดือน</span></div>
@@ -353,6 +353,7 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
         <button id="bdPayBtn" onclick="showPaymentModal()" style="width:100%;padding:13px;border-radius:10px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;background:var(--green);color:#000;border:none;"></button>
         <button id="bdCancelPayBtn" onclick="cancelPayment()" style="display:none;width:100%;padding:12px;border-radius:10px;font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer;background:transparent;border:1.5px solid var(--red);color:var(--red);"><i class="ti ti-arrow-back-up" style="font-size:16px;vertical-align:-2px;"></i> ยกเลิกการชำระ</button>
         <button id="bdSendInvoice" onclick="sendLineBill('invoice')" style="width:100%;padding:12px;border-radius:10px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;background:transparent;border:1.5px solid var(--blue);color:var(--blue);"><i class="ti ti-send" style="font-size:16px;vertical-align:-2px;"></i> ส่งใบแจ้งหนี้</button>
+        <div id="bdSendDivider" style="height:1px;background:var(--border2);margin:4px 0;"></div>
         <button id="bdSendReceipt" onclick="sendLineBill('receipt')" style="width:100%;padding:12px;border-radius:10px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;background:transparent;border:1.5px solid var(--green);color:var(--green);"><i class="ti ti-send" style="font-size:16px;vertical-align:-2px;"></i> ส่งใบเสร็จ</button>
       </div>
     </div>
@@ -1077,6 +1078,16 @@ function openBillDetail(idx){
   if(b['สถานะ']==='ชำระแล้ว'){payBtn.innerHTML='<i class="ti ti-circle-check" style="font-size:16px;vertical-align:-2px;"></i> ชำระครบแล้ว';payBtn.style.opacity='0.5';payBtn.style.cursor='default';payBtn.onclick=null;}
   else if(paidAmt>0){payBtn.innerHTML='<i class="ti ti-coins" style="font-size:16px;vertical-align:-2px;"></i> ชำระเพิ่ม ฿'+fmt(st.remaining);payBtn.style.opacity='1';payBtn.style.cursor='pointer';payBtn.onclick=showPaymentModal;}
   else{payBtn.innerHTML='<i class="ti ti-coins" style="font-size:16px;vertical-align:-2px;"></i> บันทึกชำระเงิน ฿'+fmt(total);payBtn.style.opacity='1';payBtn.style.cursor='pointer';payBtn.onclick=showPaymentModal;}
+  // Show only the action that makes sense for the bill's actual state — an invoice for an already-paid
+  // bill or a receipt for one with no payment recorded are both mistakes, not legitimate choices.
+  const sendInvoiceBtn=document.getElementById('bdSendInvoice');
+  const sendReceiptBtn=document.getElementById('bdSendReceipt');
+  const sendDivider=document.getElementById('bdSendDivider');
+  const showInvoice=b['สถานะ']!=='ชำระแล้ว';
+  const showReceipt=paidAmt>0;
+  if(sendInvoiceBtn)sendInvoiceBtn.style.display=showInvoice?'block':'none';
+  if(sendReceiptBtn)sendReceiptBtn.style.display=showReceipt?'block':'none';
+  if(sendDivider)sendDivider.style.display=(showInvoice&&showReceipt)?'block':'none';
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-bill-detail').classList.add('active');
   document.getElementById('scrollArea').scrollTop=0;
@@ -1205,6 +1216,8 @@ async function sendLineBill(type){
   const code=b['ห้องเลขที่']||'';
   const month=b['เดือน/ปี']||'';
   const label=type==='receipt'?'ใบเสร็จ':'ใบแจ้งหนี้';
+  const name=getTName(code);
+  if(!confirm('ส่ง'+label+'ห้อง '+code+' ('+name+') เดือน '+formatMonthFull(month)+' ทาง LINE ใช่หรือไม่?'))return;
   const btnId=type==='receipt'?'bdSendReceipt':'bdSendInvoice';
   const btn=document.getElementById(btnId);
   if(btn){btn.innerHTML='<i class="ti ti-loader" style="font-size:16px;vertical-align:-2px;"></i> กำลังส่ง...';btn.disabled=true;}
@@ -2229,10 +2242,11 @@ function renderDashYear(){
   // Calc yearly water/elec profit — exact same as monthly chart profitAmt
   let waterProfitTotal=0,elecProfitTotal=0,mainCostTotal=0;
   let hasWaterProfit=false,hasElecProfit=false,hasMainMeterData=false;
+  const profitData=[];
   for(let mo=1;mo<=12;mo++){
     const mKey=String(mo).padStart(2,'0')+'/'+dashYearVal;
     const hasBills=DATA.bills.some(b=>(b['เดือน/ปี']||'')===mKey);
-    if(!hasBills)continue;
+    if(!hasBills){profitData.push(0);continue;}
     // Main meter cost
     const mwRows=DATA.meter.filter(m=>(m['เดือน/ปี']||'')===mKey&&['MAIN-W1','MAIN-W2','MAIN-W3'].includes(m['ห้องเลขที่']||''));
     const mainWUnits=mwRows.reduce((s,r)=>s+parseFloat(r['หน่วยน้ำ']||0),0);
@@ -2254,6 +2268,7 @@ function renderDashYear(){
       mainCostTotal+=mainEAmt;
       hasElecProfit=true;hasMainMeterData=true;
     }
+    profitData.push(Math.round(mdata[mo-1]-(mainWAmt+mainEAmt)));
   }
   const netProfitYear=Math.round(yTotal-mainCostTotal);
   const waterProfit=waterProfitTotal;
@@ -2308,7 +2323,7 @@ function renderDashYear(){
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><i class="ti ti-glass-full" style="font-size:16px;color:var(--text2);" aria-hidden="true"></i><span style="font-size:11px;color:var(--text2);">ตู้กดน้ำ</span></div>
       <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text);">฿${fmtB(yVending)}</div>
     </div>`;
-  mkBarChart('yearChart',THAI_MONTHS_DASH,mdata,'#2ecc71');
+  mkRevenueProfitChart('yearChart',THAI_MONTHS_DASH,mdata,profitData);
 
   // Occupancy stats
   const totalRooms=DATA.rooms.length;
@@ -2358,6 +2373,16 @@ function mkBarChart(id,labels,data,color){
   if(charts[id])charts[id].destroy();
   const ctx=document.getElementById(id);if(!ctx)return;
   charts[id]=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data,backgroundColor:data.map((_,i)=>i===data.length-1?color:color+'55'),borderColor:color,borderWidth:1.5,borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8b90b8',font:{family:'Sarabun',size:10}},grid:{color:'#2e3350'}},y:{ticks:{color:'#8b90b8',font:{family:'Sarabun',size:10}},grid:{color:'#2e3350'}}}}});
+}
+
+function mkRevenueProfitChart(id,labels,revenueData,profitData){
+  if(typeof charts==='undefined')return;
+  if(charts[id])charts[id].destroy();
+  const ctx=document.getElementById(id);if(!ctx)return;
+  charts[id]=new Chart(ctx,{type:'bar',data:{labels,datasets:[
+    {label:'รายรับ',data:revenueData,backgroundColor:'#2ecc7155',borderColor:'#2ecc71',borderWidth:1.5,borderRadius:5},
+    {label:'กำไรสุทธิ',data:profitData,backgroundColor:'#4f8ef755',borderColor:'#4f8ef7',borderWidth:1.5,borderRadius:5}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:'#8b90b8',font:{family:'Sarabun',size:10},boxWidth:10}}},scales:{x:{ticks:{color:'#8b90b8',font:{family:'Sarabun',size:10}},grid:{color:'#2e3350'}},y:{ticks:{color:'#8b90b8',font:{family:'Sarabun',size:10}},grid:{color:'#2e3350'}}}}});
 }
 
 
