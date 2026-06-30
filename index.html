@@ -969,8 +969,7 @@ function renderBillsTable(){
       const total=fmtN(b['รวม']);
       const pct=parsePctField(b['เปอร์เซ็นต์เดือนแรก']);
       const proTag=pct<100?`<span style="background:#1a1a3a;color:var(--blue);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;">ไม่เต็มเดือน ${pct}%</span>`:'';
-      const tenantForDiscount=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===normCode(code)&&!t['วันที่ออก']);
-      const pDiscount=tenantForDiscount?parseFloat(tenantForDiscount['ส่วนลดส่วนบุคคล'])||0:0;
+      const pDiscount=fmtN(b['ส่วนลด']);
       const discTag=pDiscount>0?`<span style="background:#2a1a3a;color:var(--purple);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;">-฿${fmt(pDiscount)}</span>`:'';
       const st=billStatusBadge(b);
       html+=`<div onclick="openBillDetail(${globalIdx})" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;overflow:hidden;margin-bottom:8px;cursor:pointer;">
