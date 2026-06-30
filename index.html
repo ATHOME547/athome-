@@ -2590,7 +2590,7 @@ function showMultiParkingPicker(type,currentLocks,callback){
   const total=getTotalSlots(type);
   const allUsed=getUsedSlots(type);
   // Remove current tenant's locks from "used" so they can reselect
-  const usedOthers=allUsed.filter(s=>!currentLocks.includes(s)&&!currentLocks.includes(String(parseInt(s))));
+  const usedOthers=allUsed.filter(s=>{const sp=String(parseInt(s)||s).padStart(2,'0');return!currentLocks.includes(s)&&!currentLocks.includes(String(parseInt(s)))&&!currentLocks.includes(sp);});
   let selected=[...currentLocks];
 
   function buildModal(){
