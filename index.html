@@ -237,6 +237,7 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
           <div style="display:flex;justify-content:space-between;font-size:11px;"><span id="occHave" style="color:var(--green);"></span><span id="occEmpty" style="color:var(--text3);"></span></div>
         </div>
         <div class="section-title">รายได้</div>
+        <div id="dashProfitCard" style="margin-bottom:10px;"></div>
         <div id="dashRevenueGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;"></div>
         <div class="section-title">ชำระล่าสุด</div>
         <div class="chart-card" style="padding:14px;" id="recentPayments"></div>
@@ -712,7 +713,7 @@ async function apiPost(payload){
   const res=await fetch(API_URL,{method:'POST',body:JSON.stringify(payload)});
   return await res.json();
 }
-let DATA={rooms:[],tenants:[],bills:[],meter:[]};
+let DATA={rooms:[],tenants:[],bills:[],meter:[],extraIncome:[]};
 let charts={};
 let dataLoaded=false;
 
@@ -826,8 +827,8 @@ async function loadData(){
   document.getElementById('dashContent').style.display='none';
   document.getElementById('fetchWarning').innerHTML='';
   try{
-    const[rooms,tenants,bills,meter]=await Promise.all([fetchSheet('ห้องพัก'),fetchSheet('ผู้เช่า'),fetchSheet('บิลรายเดือน'),fetchSheet('มิเตอร์')]);
-    DATA={rooms,tenants,bills,meter};dataLoaded=true;
+    const[rooms,tenants,bills,meter,extraIncome]=await Promise.all([fetchSheet('ห้องพัก'),fetchSheet('ผู้เช่า'),fetchSheet('บิลรายเดือน'),fetchSheet('มิเตอร์'),fetchSheet('รายได้เสริม')]);
+    DATA={rooms,tenants,bills,meter,extraIncome};dataLoaded=true;
     populateFilters();
     document.getElementById('loadingIndicator').style.display='none';
     document.getElementById('dashContent').style.display='block';
@@ -928,7 +929,7 @@ function renderBillsTable(){
     else{genBtn.style.display='none';}
   }
   let totalAmt=0,paidAmt=0,unpaidAmt=0;
-  bills.forEach(b=>{const t=calcBillTotal(b['ห้องเลขที่']||'',b['เดือน/ปี']||'');totalAmt+=t;if(b['สถานะ']==='ชำระแล้ว')paidAmt+=t;else unpaidAmt+=t;});
+  bills.forEach(b=>{const t=fmtN(b['รวม']);totalAmt+=t;if(b['สถานะ']==='ชำระแล้ว')paidAmt+=t;else unpaidAmt+=t;});
   document.getElementById('billSummary').innerHTML=`
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 8px;text-align:center;"><div style="font-size:10px;color:var(--text2);">ทั้งหมด</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--text);">${bills.length} ห้อง</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--yellow);margin-top:3px;">฿${fmt(totalAmt)}</div></div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 8px;text-align:center;"><div style="font-size:10px;color:var(--text2);">ชำระแล้ว</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--text);">${paid} ห้อง</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green);margin-top:3px;">฿${fmt(paidAmt)}</div></div>
@@ -1949,6 +1950,28 @@ function getMeterByMonth(m,y){
 
 function fmtB(n){const x=parseFloat((n+'').replace(/,/g,''));return isNaN(x)?'0':x.toLocaleString('th-TH');}
 
+async function editExtraIncome(field,label){
+  const eiKey=String(dashM).padStart(2,'0')+'/'+dashY;
+  const row=DATA.extraIncome.find(r=>(r['เดือน/ปี']||'')===eiKey);
+  const current=row?row[field]:'';
+  const v=prompt('ยอด'+label+' เดือน '+THAI_MONTHS_FULL[dashM-1]+' '+dashY+' (บาท):',current||'0');
+  if(v===null)return;
+  const n=parseFloat(v);
+  if(isNaN(n)||n<0){alert('กรุณากรอกตัวเลข');return;}
+  try{
+    if(row){
+      const rowIndex=DATA.extraIncome.indexOf(row)+1;
+      const res=await apiPost({sheet:'รายได้เสริม',action:'update_row',rowIndex,data:{[field]:n}});
+      if(res.success)row[field]=String(n);else{alert('บันทึกไม่สำเร็จ: '+(res.error||''));return;}
+    }else{
+      const newRow={'เดือน/ปี':eiKey,'เครื่องซักผ้า':field==='เครื่องซักผ้า'?n:0,'กดน้ำ':field==='กดน้ำ'?n:0};
+      const res=await apiPost({sheet:'รายได้เสริม',action:'append_row',data:newRow});
+      if(res.success)DATA.extraIncome.push(newRow);else{alert('บันทึกไม่สำเร็จ: '+(res.error||''));return;}
+    }
+    renderDashboard();
+  }catch(e){alert('เกิดข้อผิดพลาด: '+e.message);}
+}
+
 function renderDashboard(){
   if(!dataLoaded)return;
   if(!dashInited&&DATA.bills.length){
@@ -1983,6 +2006,26 @@ function renderDashboard(){
     parkTotal+=fmtN(b['ค่าจอดรถยนต์'])+fmtN(b['ค่าจอดมอเตอร์']);
   });
 
+  const eiKey=String(dashM).padStart(2,'0')+'/'+dashY;
+  const eiRow=DATA.extraIncome.find(r=>(r['เดือน/ปี']||'')===eiKey);
+  const laundryAmt=eiRow?fmtN(eiRow['เครื่องซักผ้า']):0;
+  const vendingAmt=eiRow?fmtN(eiRow['กดน้ำ']):0;
+  grandTotal+=laundryAmt+vendingAmt;
+
+  // Net profit — total revenue minus what was actually paid to the water/electricity provider that month
+  const mwRows=DATA.meter.filter(m=>(m['เดือน/ปี']||'')===eiKey&&['MAIN-W1','MAIN-W2','MAIN-W3'].includes(m['ห้องเลขที่']||''));
+  const mainWAmt=mwRows.reduce((s,r)=>s+parseFloat(r['ยอดน้ำ']||0),0);
+  const meRow=DATA.meter.find(m=>(m['เดือน/ปี']||'')===eiKey&&(m['ห้องเลขที่']||'')==='MAIN-E1');
+  const mainEAmt=meRow?parseFloat(meRow['ยอดไฟ']||0):0;
+  const hasMainMeterData=mwRows.length>0||!!meRow;
+  const netProfit=Math.round(grandTotal-mainWAmt-mainEAmt);
+  const pc=document.getElementById('dashProfitCard');
+  if(pc)pc.innerHTML=hasMainMeterData?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><i class="ti ti-chart-line" style="font-size:16px;color:var(--green);" aria-hidden="true"></i><span style="font-size:11px;color:var(--green);">กำไรสุทธิ</span></div>
+      <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:var(--green);">฿${fmtB(netProfit)}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px;">รายได้ ฿${fmtB(grandTotal)} − ค่าน้ำ-ไฟจ่ายจริง ฿${fmtB(Math.round(mainWAmt+mainEAmt))}</div>
+    </div>`:'';
+
   // Revenue grid 2x3 with Tabler icons
   const rg=document.getElementById('dashRevenueGrid');
   if(rg)rg.innerHTML=`
@@ -2009,6 +2052,16 @@ function renderDashboard(){
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><i class="ti ti-parking" style="font-size:16px;color:var(--text2);" aria-hidden="true"></i><span style="font-size:11px;color:var(--text2);">ค่าที่จอด</span></div>
       <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text);">฿${fmtB(parkTotal)}</div>
+    </div>
+    <div onclick="editExtraIncome('เครื่องซักผ้า','เครื่องซักผ้า')" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;position:relative;cursor:pointer;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><i class="ti ti-wash-machine" style="font-size:16px;color:var(--text2);" aria-hidden="true"></i><span style="font-size:11px;color:var(--text2);">เครื่องซักผ้า</span></div>
+      <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text);">฿${fmtB(laundryAmt)}</div>
+      <i class="ti ti-pencil" style="position:absolute;top:14px;right:14px;font-size:13px;color:var(--text3);" aria-hidden="true"></i>
+    </div>
+    <div onclick="editExtraIncome('กดน้ำ','ตู้กดน้ำ')" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;position:relative;cursor:pointer;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><i class="ti ti-glass-full" style="font-size:16px;color:var(--text2);" aria-hidden="true"></i><span style="font-size:11px;color:var(--text2);">ตู้กดน้ำ</span></div>
+      <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text);">฿${fmtB(vendingAmt)}</div>
+      <i class="ti ti-pencil" style="position:absolute;top:14px;right:14px;font-size:13px;color:var(--text3);" aria-hidden="true"></i>
     </div>`;
 
   // Recent payments
