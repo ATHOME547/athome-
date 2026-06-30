@@ -861,6 +861,13 @@ let billCurrentMonth='';
 let billDetailIdx=-1;
 let billProrate=100;
 let billPreview=null;
+// Google Sheets percent-formatted cells return the raw fraction (e.g. 0.5) instead of 50 via the data API.
+function parsePctField(raw){
+  let n=parseFloat(raw);
+  if(!n)return 100;
+  if(n>0&&n<=1)n=Math.round(n*100);
+  return n;
+}
 
 function sortMonths(arr){
   return arr.slice().sort((a,b)=>{
@@ -959,9 +966,9 @@ function renderBillsTable(){
     if(b){
       const globalIdx=DATA.bills.indexOf(b);
       const name=getTName(code);
-      const total=calcBillTotal(code,b['เดือน/ปี']||'');
-      const pct=parseInt(b['เปอร์เซ็นต์เดือนแรก'])||100;
-      const proTag=pct<100?`<span style="background:#1a1a3a;color:var(--blue);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;">เดือนแรก ${pct}%</span>`:'';
+      const total=fmtN(b['รวม']);
+      const pct=parsePctField(b['เปอร์เซ็นต์เดือนแรก']);
+      const proTag=pct<100?`<span style="background:#1a1a3a;color:var(--blue);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;">ไม่เต็มเดือน ${pct}%</span>`:'';
       const tenantForDiscount=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===normCode(code)&&!t['วันที่ออก']);
       const pDiscount=tenantForDiscount?parseFloat(tenantForDiscount['ส่วนลดส่วนบุคคล'])||0:0;
       const discTag=pDiscount>0?`<span style="background:#2a1a3a;color:var(--purple);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;">-฿${fmt(pDiscount)}</span>`:'';
@@ -1001,7 +1008,7 @@ function getBillStatusInfo(b){
 function openBillDetail(idx){
   billDetailIdx=idx;bdVacantCode='';billPreview=null;
   const b=DATA.bills[idx];if(!b)return;
-  billProrate=b['เปอร์เซ็นต์เดือนแรก']?(parseInt(b['เปอร์เซ็นต์เดือนแรก'])||100):100;
+  billProrate=parsePctField(b['เปอร์เซ็นต์เดือนแรก']);
   const code=b['ห้องเลขที่']||'';
   const name=getTName(code);
   const st=getBillStatusInfo(b);
@@ -1014,20 +1021,34 @@ function openBillDetail(idx){
   const tenant=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===normCode(code)&&!t['วันที่ออก']);
   const moveIn=tenant?tenant['วันที่เข้าอยู่']:'';
   const billMonth=b['เดือน/ปี']||'';
-  let isNew=false;
+  let isPartial=false,partialReason='';
   if(moveIn&&billMonth){
     try{
       const md=parseThai(moveIn);const bParts=billMonth.split('/');
       let bm=parseInt(bParts[0]),by=parseInt(bParts[1]);
       if(by>2500)by-=543;
-      if(md&&md.getFullYear()===by&&md.getMonth()+1===bm&&md.getDate()>1)isNew=true;
+      if(md&&md.getFullYear()===by&&md.getMonth()+1===bm&&md.getDate()>1){isPartial=true;partialReason='เข้าอยู่ <b>'+moveIn+'</b> — ไม่เต็มเดือน';}
     }catch{}
+  }
+  if(!isPartial){
+    const leavingTenant=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===normCode(code)&&t['วันที่ออก']);
+    if(leavingTenant){
+      try{
+        const od=parseThai(leavingTenant['วันที่ออก']);const bParts=billMonth.split('/');
+        let bm=parseInt(bParts[0]),by=parseInt(bParts[1]);
+        if(by>2500)by-=543;
+        if(od&&od.getFullYear()===by&&od.getMonth()+1===bm){
+          const lastDay=new Date(by,bm,0).getDate();
+          if(od.getDate()<lastDay){isPartial=true;partialReason='ย้ายออก <b>'+leavingTenant['วันที่ออก']+'</b> — ไม่เต็มเดือน';}
+        }
+      }catch{}
+    }
   }
   const infoEl=document.getElementById('bdNewInfo');
   const proEl=document.getElementById('bdProrateSection');
-  const showPro=isNew||billProrate<100;
-  infoEl.style.display=isNew?'block':'none';
-  if(isNew)infoEl.innerHTML='ℹ️ เข้าอยู่ <b>'+moveIn+'</b> — เดือนแรกไม่เต็มเดือน';
+  const showPro=isPartial||billProrate<100;
+  infoEl.style.display=isPartial?'block':'none';
+  if(isPartial)infoEl.innerHTML='ℹ️ '+partialReason;
   proEl.style.display=showPro?'block':'none';
   if(showPro)renderProrateButtons();
   const editActionsEl=document.getElementById('bdEditActions');
@@ -1379,6 +1400,7 @@ async function saveBillEdits(){
       billPreview=null;
       updateBillItems();
       btn.innerHTML='✅ บันทึกแล้ว';setTimeout(()=>{btn.innerHTML=orig;btn.disabled=false;},1500);
+      renderBillsTable();
       renderDashboard();
     }else{alert('บันทึกไม่สำเร็จ: '+(res.error||''));btn.innerHTML=orig;btn.disabled=false;}
   }catch(e){alert('เกิดข้อผิดพลาด: '+e.message);btn.innerHTML=orig;btn.disabled=false;}
