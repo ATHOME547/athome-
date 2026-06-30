@@ -1091,7 +1091,7 @@ function openVacantDetail(code){
     openAddTenant();
     setTimeout(()=>{document.getElementById('at_room').value=code;
       const tag=document.getElementById('at_room_tag');if(tag)tag.textContent=code;
-      const info=document.getElementById('at_room_info');if(info)info.textContent=(room?room['ประเภท']:'')+(room?' · ฿'+room['ค่าเช่า']:'');
+      const info=document.getElementById('at_room_info');if(info)info.textContent=(room?room['ประเภท']:'')+(room?' · ฿'+getRentByRoom(code):'');
       document.getElementById('at_room_card').style.display='block';
       document.getElementById('at_room_empty').style.display='none';
     },50);
@@ -2492,7 +2492,7 @@ function renderTenantDetail(){
 
   const roomCardHtml=rooms.filter(r=>!r['วันที่ออก']).map((r,ri)=>{
     const roomInfo=DATA.rooms.find(x=>normCode(x['ห้องเลขที่'])===normCode(r['ห้องเลขที่']||''));
-    const rent=roomInfo?roomInfo['ค่าเช่า']:'—';
+    const rent=roomInfo?getRentByRoom(r['ห้องเลขที่']):'—';
     const type=roomInfo?roomInfo['ประเภท']:'—';
     const cars=(r['รถยนต์ล็อก']||'').split(',').filter(Boolean);
     const motos=(r['จักยานยนต์ล็อก']||'').split(',').filter(Boolean);
@@ -3175,7 +3175,7 @@ function atPickRoom(){
       document.getElementById('at_room').value=selected;
       const roomData=DATA.rooms.find(r=>normCode(r['ห้องเลขที่'])===normCode(selected));
       const tag=document.getElementById('at_room_tag');if(tag)tag.textContent=selected;
-      const info=document.getElementById('at_room_info');if(info)info.textContent=(roomData?roomData['ประเภท']:'')+(roomData?' · ฿'+roomData['ค่าเช่า']:'');
+      const info=document.getElementById('at_room_info');if(info)info.textContent=(roomData?roomData['ประเภท']:'')+(roomData?' · ฿'+getRentByRoom(selected):'');
       document.getElementById('at_room_card').style.display='block';
       document.getElementById('at_room_empty').style.display='none';
       document.getElementById('atRoomPickerModal').remove();
@@ -3259,7 +3259,7 @@ function showRoomDetailPage(){
 
   const type = room['ประเภท']||'';
   const isAir = type.includes('แอร์');
-  const rent = room['ค่าเช่า']||'—';
+  const rent = getRentByRoom(code)||'—';
 
   document.getElementById('rdRoomCode').textContent = code;
   document.getElementById('rdRoomType').textContent = type + ' · ฿' + rent + '/เดือน';
