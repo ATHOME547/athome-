@@ -860,6 +860,7 @@ function getTName(room){const t=DATA.tenants.find(t=>t['ห้องเลขท
 let billCurrentMonth='';
 let billDetailIdx=-1;
 let billProrate=100;
+let billPreview=null;
 
 function sortMonths(arr){
   return arr.slice().sort((a,b)=>{
@@ -998,7 +999,7 @@ function getBillStatusInfo(b){
 }
 
 function openBillDetail(idx){
-  billDetailIdx=idx;bdVacantCode='';
+  billDetailIdx=idx;bdVacantCode='';billPreview=null;
   const b=DATA.bills[idx];if(!b)return;
   billProrate=b['เปอร์เซ็นต์เดือนแรก']?(parseInt(b['เปอร์เซ็นต์เดือนแรก'])||100):100;
   const code=b['ห้องเลขที่']||'';
@@ -1080,20 +1081,29 @@ function openVacantDetail(code){
 }
 
 async function reloadBillDetail(){
-  const btn=event.target.closest('button');if(btn)btn.innerHTML='⏳';
+  const btn=event.target.closest('button');const orig=btn?btn.innerHTML:'';
+  if(btn){btn.innerHTML='⏳ กำลังดึงข้อมูล...';btn.disabled=true;}
+  const prevBill=DATA.bills[billDetailIdx];
+  const prevKey=prevBill?{code:prevBill['ห้องเลขที่'],month:prevBill['เดือน/ปี']}:null;
   try{
     const[rooms,tenants,bills,meter]=await Promise.all([fetchSheet('ห้องพัก'),fetchSheet('ผู้เช่า'),fetchSheet('บิลรายเดือน'),fetchSheet('มิเตอร์')]);
     DATA={rooms,tenants,bills,meter};
-  }catch(e){alert('โหลดข้อมูลไม่สำเร็จ: '+e.message);}
-  if(btn)btn.innerHTML='↻';
+  }catch(e){alert('โหลดข้อมูลไม่สำเร็จ: '+e.message);if(btn){btn.innerHTML=orig;btn.disabled=false;}return;}
+  if(btn){btn.innerHTML=orig;btn.disabled=false;}
   if(bdVacantCode){
     const tenant=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===normCode(bdVacantCode)&&!t['วันที่ออก']);
     const b=DATA.bills.find(x=>normCode(x['ห้องเลขที่'])===normCode(bdVacantCode)&&(x['เดือน/ปี']||'')===billCurrentMonth);
     if(b){openBillDetail(DATA.bills.indexOf(b));return;}
     if(tenant){openVacantDetail(bdVacantCode);return;}
+    return;
   }
-  if(billDetailIdx>=0&&DATA.bills[billDetailIdx])openBillDetail(billDetailIdx);
-  else closeBillDetail();
+  if(!prevKey){closeBillDetail();return;}
+  const newIdx=DATA.bills.findIndex(x=>normCode(x['ห้องเลขที่'])===normCode(prevKey.code)&&(x['เดือน/ปี']||'')===prevKey.month);
+  if(newIdx<0){closeBillDetail();return;}
+  billDetailIdx=newIdx;
+  const b=DATA.bills[newIdx];
+  billPreview=computeBillCalc(b['ห้องเลขที่']||'',b['เดือน/ปี']||'',billProrate);
+  updateBillItems();
 }
 
 let _payMethod='transfer';
@@ -1215,7 +1225,12 @@ function renderProrateButtons(){
   `<div onclick="promptCustomProrate()" style="padding:8px 4px;background:${custom?'#1a1a3a':'var(--surface2)'};border:1.5px solid ${custom?'var(--blue)':'var(--border)'};border-radius:8px;font-size:11px;font-weight:600;color:${custom?'var(--blue)':'var(--text3)'};text-align:center;cursor:pointer;min-width:50px;">${custom?billProrate+'%':'อื่นๆ'}</div>`;
 }
 
-function setBillProrate(pct){billProrate=pct;renderProrateButtons();updateBillItems();}
+function setBillProrate(pct){
+  billProrate=pct;renderProrateButtons();
+  const b=DATA.bills[billDetailIdx];if(!b)return;
+  billPreview=computeBillCalc(b['ห้องเลขที่']||'',b['เดือน/ปี']||'',pct);
+  updateBillItems();
+}
 
 function promptCustomProrate(){
   const v=prompt('กรอกเปอร์เซ็นต์ (1-100):','50');
@@ -1251,12 +1266,9 @@ function calcBillTotal(code,billMonth){
   return Math.max(0,getRentByRoom(code)+Math.round(wU*rWater)+Math.round(eU*rElec)+rCommon+nCars*rCar+nMotos*rMoto-pDiscount);
 }
 
-function updateBillItems(){
-  const b=DATA.bills[billDetailIdx];if(!b)return;
-  const pct=billProrate/100;
-  const isProrate=billProrate<100;
-  const code=b['ห้องเลขที่']||'';
-  const curMonth=b['เดือน/ปี']||'';
+// Recomputes a bill from the live ห้องพัก/ผู้เช่า/มิเตอร์/อัตรา sheets — used only when the user
+// explicitly pulls fresh data (reloadBillDetail / setBillProrate), never on plain page render.
+function computeBillCalc(code,curMonth,pct){
   const prevMonth=calcPrevMonth(curMonth);
   const curMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===normCode(code)&&(m['เดือน/ปี']||'')===curMonth);
   const prevMeter=prevMonth?DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===normCode(code)&&(m['เดือน/ปี']||'')===prevMonth):null;
@@ -1266,20 +1278,46 @@ function updateBillItems(){
   const rCommon=parseFloat(rates.r_common)||0;
   const rCar=parseFloat(rates.r_car)||0;
   const rMoto=parseFloat(rates.r_moto)||0;
-  const room=DATA.rooms.find(r=>normCode(r['ห้องเลขที่'])===normCode(code));
   const tenant=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===normCode(code)&&!t['วันที่ออก']);
-  const rent=getRentByRoom(code);
+  const rentFull=getRentByRoom(code);
   const nCars=tenant?(tenant['รถยนต์ล็อก']||'').split(',').filter(Boolean).length:0;
   const nMotos=tenant?(tenant['จักยานยนต์ล็อก']||'').split(',').filter(Boolean).length:0;
-  const common=rCommon;const car=nCars*rCar;const moto=nMotos*rMoto;
-  const proRent=Math.round(rent*pct);const proCommon=Math.round(common*pct);
-  const proCar=Math.round(car*pct);const proMoto=Math.round(moto*pct);
+  const pctF=pct/100;
+  const rent=Math.round(rentFull*pctF);
+  const common=Math.round(rCommon*pctF);
+  const car=Math.round(nCars*rCar*pctF);
+  const moto=Math.round(nMotos*rMoto*pctF);
   let elecOld=0,elecNew=0,elecUnits=0,waterOld=0,waterNew=0,waterUnits=0;
   if(curMeter&&prevMeter){
     elecOld=parseFloat(prevMeter['หน่วยไฟ'])||0;elecNew=parseFloat(curMeter['หน่วยไฟ'])||0;elecUnits=calcMeterDiff(elecNew,elecOld);
     waterOld=parseFloat(prevMeter['หน่วยน้ำ'])||0;waterNew=parseFloat(curMeter['หน่วยน้ำ'])||0;waterUnits=calcMeterDiff(waterNew,waterOld);
   }
-  const elec=Math.round(elecUnits*rElec);const water=Math.round(waterUnits*rWater);
+  const elec=Math.round(elecUnits*rElec);
+  const water=Math.round(waterUnits*rWater);
+  const discount=tenant?parseFloat(tenant['ส่วนลดส่วนบุคคล'])||0:0;
+  const total=Math.max(0,rent+water+elec+common+car+moto-discount);
+  return{pct,rent,water,elec,common,car,moto,discount,total,elecOld,elecNew,elecUnits,waterOld,waterNew,waterUnits};
+}
+
+function updateBillItems(){
+  const b=DATA.bills[billDetailIdx];if(!b)return;
+  const isProrate=billProrate<100;
+  const pctF=billProrate/100;
+  let rent,water,elec,common,car,moto,discount,elecOld,elecNew,elecUnits,waterOld,waterNew,waterUnits,hasMeterDetail;
+  if(billPreview){
+    ({rent,water,elec,common,car,moto,discount,elecOld,elecNew,elecUnits,waterOld,waterNew,waterUnits}=billPreview);
+    hasMeterDetail=true;
+  }else{
+    rent=fmtN(b['ค่าเช่า']);water=fmtN(b['ค่าน้ำ']);elec=fmtN(b['ค่าไฟ']);common=fmtN(b['ค่าส่วนกลาง']);
+    car=fmtN(b['ค่าจอดรถยนต์']);moto=fmtN(b['ค่าจอดมอเตอร์']);discount=fmtN(b['ส่วนลด']);
+    hasMeterDetail=b['หน่วยไฟเก่า']!=null&&b['หน่วยไฟเก่า']!=='';
+    elecOld=hasMeterDetail?fmtN(b['หน่วยไฟเก่า']):0;elecNew=hasMeterDetail?fmtN(b['หน่วยไฟใหม่']):0;
+    waterOld=hasMeterDetail?fmtN(b['หน่วยน้ำเก่า']):0;waterNew=hasMeterDetail?fmtN(b['หน่วยน้ำใหม่']):0;
+    elecUnits=hasMeterDetail?calcMeterDiff(elecNew,elecOld):0;waterUnits=hasMeterDetail?calcMeterDiff(waterNew,waterOld):0;
+  }
+  // "เต็มจำนวน" reference for the prorate strikethrough, back-derived from the prorated value — informational only.
+  const backFull=v=>pctF>0?Math.round(v/pctF):v;
+  const rentFull=backFull(rent),commonFull=backFull(common),carFull=backFull(car),motoFull=backFull(moto);
   const badge=isProrate?`<span style="font-size:9px;background:#1a1a3a;color:var(--blue);padding:2px 6px;border-radius:4px;font-weight:600;margin-left:4px;">${billProrate}%</span>`:'';
   function itemRow(label,val,orig,sub,showBadge){
     const hasOrig=showBadge&&isProrate&&orig!==val;
@@ -1289,27 +1327,28 @@ function updateBillItems(){
       <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${val===0?'var(--text3)':'var(--text)'};">฿${fmt(val)}</span>
     </div>`;
   }
-  function meterRow(icon,label,color,oldVal,newVal,units,rate,total){
-    const detail=oldVal||newVal?`<span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text);">${fmt(oldVal)} → ${fmt(newVal)} = ${units} × ฿${rate}</span>`:'';
+  function meterRow(icon,label,color,oldVal,newVal,units,total){
+    const rate=units>0?Math.round(total/units):0;
+    const detail=hasMeterDetail&&(oldVal||newVal)?`<span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text);">${fmt(oldVal)} → ${fmt(newVal)} = ${units} × ฿${rate}</span>`:'';
     return`<div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--surface2);gap:8px;border-left:3px solid ${color};">
       <span style="font-size:12px;color:${color};flex-shrink:0;">${icon} ${label}</span>
       <span style="flex:1;text-align:right;">${detail}</span>
       <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${color};">฿${fmt(total)}</span>
     </div>`;
   }
-  const rentSub=isProrate?'฿'+fmt(rent)+' × '+billProrate+'%':'';
-  const commonSub=isProrate&&common>0?'฿'+fmt(common)+' × '+billProrate+'%':'';
-  let html=itemRow('ค่าเช่าห้องพัก',proRent,rent,rentSub,true);
-  html+=meterRow('<i class="ti ti-bolt" style="font-size:14px;vertical-align:-2px;"></i>','ค่าไฟฟ้า','var(--yellow)',elecOld,elecNew,elecUnits,rElec,elec);
-  html+=meterRow('<i class="ti ti-droplet" style="font-size:14px;vertical-align:-2px;"></i>','ค่าน้ำประปา','var(--blue)',waterOld,waterNew,waterUnits,rWater,water);
-  html+=itemRow('ค่าส่วนกลาง',proCommon,common,commonSub,true);
-  html+=itemRow('ค่าจอดรถยนต์',proCar,car,'',true);
-  html+=itemRow('ค่าจอดมอเตอร์ไซค์',proMoto,moto,'',true);
-  const personalDiscount=tenant?parseFloat(tenant['ส่วนลดส่วนบุคคล'])||0:0;
-  if(personalDiscount>0){
+  const rentSub=isProrate?'฿'+fmt(rentFull)+' × '+billProrate+'%':'';
+  const commonSub=isProrate&&commonFull>0?'฿'+fmt(commonFull)+' × '+billProrate+'%':'';
+  let html=billPreview?`<div style="background:#1a1a3a;border:1px solid rgba(79,142,247,0.35);border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:11px;color:var(--blue);"><i class="ti ti-refresh" style="font-size:14px;vertical-align:-2px;"></i> พรีวิวข้อมูลล่าสุด — ยังไม่บันทึก กด "บันทึกการแก้ไข" เพื่อยืนยัน</div>`:'';
+  html+=itemRow('ค่าเช่าห้องพัก',rent,rentFull,rentSub,true);
+  html+=meterRow('<i class="ti ti-bolt" style="font-size:14px;vertical-align:-2px;"></i>','ค่าไฟฟ้า','var(--yellow)',elecOld,elecNew,elecUnits,elec);
+  html+=meterRow('<i class="ti ti-droplet" style="font-size:14px;vertical-align:-2px;"></i>','ค่าน้ำประปา','var(--blue)',waterOld,waterNew,waterUnits,water);
+  html+=itemRow('ค่าส่วนกลาง',common,commonFull,commonSub,true);
+  html+=itemRow('ค่าจอดรถยนต์',car,carFull,'',true);
+  html+=itemRow('ค่าจอดมอเตอร์ไซค์',moto,motoFull,'',true);
+  if(discount>0){
     html+=`<div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--surface2);gap:8px;border-left:3px solid var(--purple);">
       <span style="font-size:12px;color:var(--purple);flex:1;"><i class="ti ti-tag" style="font-size:14px;vertical-align:-2px;"></i> ส่วนลดส่วนบุคคล</span>
-      <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--purple);">-฿${fmt(personalDiscount)}</span>
+      <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--purple);">-฿${fmt(discount)}</span>
     </div>`;
   }
   document.getElementById('bdItemsCard').innerHTML=html;
@@ -1318,73 +1357,27 @@ function updateBillItems(){
 
 function updateBillTotal(){
   const b=DATA.bills[billDetailIdx];if(!b)return;
-  const pct=billProrate/100;
-  const code=b['ห้องเลขที่']||'';
-  const curMonth=b['เดือน/ปี']||'';
-  const prevMonth=calcPrevMonth(curMonth);
-  const curMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===normCode(code)&&(m['เดือน/ปี']||'')===curMonth);
-  const prevMeter=prevMonth?DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===normCode(code)&&(m['เดือน/ปี']||'')===prevMonth):null;
-  const rates=getRatesLocal();
-  const rWater=parseFloat(rates.r_water)||25;const rElec=parseFloat(rates.r_electric)||7;
-  let waterUnits=0,elecUnits=0;
-  if(curMeter&&prevMeter){
-    elecUnits=calcMeterDiff(parseFloat(curMeter['หน่วยไฟ'])||0,parseFloat(prevMeter['หน่วยไฟ'])||0);
-    waterUnits=calcMeterDiff(parseFloat(curMeter['หน่วยน้ำ'])||0,parseFloat(prevMeter['หน่วยน้ำ'])||0);
-  }
-  const rCommon=parseFloat(rates.r_common)||0;const rCar=parseFloat(rates.r_car)||0;const rMoto=parseFloat(rates.r_moto)||0;
-  const room=DATA.rooms.find(r=>normCode(r['ห้องเลขที่'])===normCode(code));
-  const tenant=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===normCode(code)&&!t['วันที่ออก']);
-  const rentBase=getRentByRoom(code);
-  const nCars=tenant?(tenant['รถยนต์ล็อก']||'').split(',').filter(Boolean).length:0;
-  const nMotos=tenant?(tenant['จักยานยนต์ล็อก']||'').split(',').filter(Boolean).length:0;
-  const rent=Math.round(rentBase*pct);
-  const water=Math.round(waterUnits*rWater);const elec=Math.round(elecUnits*rElec);
-  const common=Math.round(rCommon*pct);
-  const car=Math.round(nCars*rCar*pct);
-  const moto=Math.round(nMotos*rMoto*pct);
-  const subtotal=rent+water+elec+common+car+moto;
-  const personalDiscount=tenant?parseFloat(tenant['ส่วนลดส่วนบุคคล'])||0:0;
-  const total=Math.max(0,subtotal-personalDiscount);
+  const total=billPreview?billPreview.total:fmtN(b['รวม']);
   const totalHtml=`<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--surface2);"><span style="font-size:13px;font-weight:700;color:var(--text);">รวมทั้งสิ้น</span><span style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--yellow);">฿${fmt(total)}</span></div>`;
   document.getElementById('bdTotalCard').innerHTML=totalHtml;
 }
 
+function billCalcToSaveData(calc){
+  return{'เปอร์เซ็นต์เดือนแรก':calc.pct,'ค่าเช่า':calc.rent,'ค่าน้ำ':calc.water,'ค่าไฟ':calc.elec,'ค่าส่วนกลาง':calc.common,'ค่าจอดรถยนต์':calc.car,'ค่าจอดมอเตอร์':calc.moto,'ส่วนลด':calc.discount,'รวม':calc.total,'หน่วยไฟเก่า':calc.elecOld,'หน่วยไฟใหม่':calc.elecNew,'หน่วยน้ำเก่า':calc.waterOld,'หน่วยน้ำใหม่':calc.waterNew};
+}
 
 async function saveBillEdits(){
   const b=DATA.bills[billDetailIdx];if(!b)return;
-  const pct=billProrate/100;
-  const code=b['ห้องเลขที่']||'';
-  const curMonth=b['เดือน/ปี']||'';
-  const prevMonth=calcPrevMonth(curMonth);
-  const curMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===normCode(code)&&(m['เดือน/ปี']||'')===curMonth);
-  const prevMeter=prevMonth?DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===normCode(code)&&(m['เดือน/ปี']||'')===prevMonth):null;
-  const rates=getRatesLocal();
-  const rWater=parseFloat(rates.r_water)||25;const rElec=parseFloat(rates.r_electric)||7;
-  let waterUnits=0,elecUnits=0;
-  if(curMeter&&prevMeter){
-    elecUnits=calcMeterDiff(parseFloat(curMeter['หน่วยไฟ'])||0,parseFloat(prevMeter['หน่วยไฟ'])||0);
-    waterUnits=calcMeterDiff(parseFloat(curMeter['หน่วยน้ำ'])||0,parseFloat(prevMeter['หน่วยน้ำ'])||0);
-  }
-  const rCommon=parseFloat(rates.r_common)||0;const rCar=parseFloat(rates.r_car)||0;const rMoto=parseFloat(rates.r_moto)||0;
-  const room=DATA.rooms.find(r=>normCode(r['ห้องเลขที่'])===normCode(code));
-  const tenant=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===normCode(code)&&!t['วันที่ออก']);
-  const rentBase=getRentByRoom(code);
-  const nCars=tenant?(tenant['รถยนต์ล็อก']||'').split(',').filter(Boolean).length:0;
-  const nMotos=tenant?(tenant['จักยานยนต์ล็อก']||'').split(',').filter(Boolean).length:0;
-  const rent=Math.round(rentBase*pct);
-  const water=Math.round(waterUnits*rWater);const elec=Math.round(elecUnits*rElec);
-  const common=Math.round(rCommon*pct);
-  const car=Math.round(nCars*rCar*pct);
-  const moto=Math.round(nMotos*rMoto*pct);
-  const personalDiscount=tenant?parseFloat(tenant['ส่วนลดส่วนบุคคล'])||0:0;
-  const total=Math.max(0,rent+water+elec+common+car+moto-personalDiscount);
-  const data={'เปอร์เซ็นต์เดือนแรก':billProrate,'ค่าเช่า':rent,'ค่าน้ำ':water,'ค่าไฟ':elec,'ค่าส่วนกลาง':common,'ค่าจอดรถยนต์':car,'ค่าจอดมอเตอร์':moto,'ส่วนลด':personalDiscount,'รวม':total};
+  if(!billPreview){alert('กรุณากด "ดึงข้อมูลล่าสุด" ก่อนบันทึก');return;}
+  const data=billCalcToSaveData(billPreview);
   const btn=document.getElementById('bdSaveBtn');const orig=btn.innerHTML;
   btn.innerHTML='⏳ กำลังบันทึก...';btn.disabled=true;
   try{
     const res=await apiPost({sheet:'บิลรายเดือน',action:'update_row',rowIndex:billDetailIdx+1,data});
     if(res.success){
-      Object.assign(DATA.bills[billDetailIdx],data);
+      Object.assign(b,data);
+      billPreview=null;
+      updateBillItems();
       btn.innerHTML='✅ บันทึกแล้ว';setTimeout(()=>{btn.innerHTML=orig;btn.disabled=false;},1500);
       renderDashboard();
     }else{alert('บันทึกไม่สำเร็จ: '+(res.error||''));btn.innerHTML=orig;btn.disabled=false;}
@@ -1414,10 +1407,10 @@ async function generateBills(){
       const rent=getRentByRoom(code);
       const curMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===curMonth);
       const prevMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===prevMonth);
-      let waterUnits=0,elecUnits=0;
+      let waterUnits=0,elecUnits=0,elecOld=0,elecNew=0,waterOld=0,waterNew=0;
       if(curMeter&&prevMeter){
-        waterUnits=calcMeterDiff(parseFloat(curMeter['หน่วยน้ำ'])||0,parseFloat(prevMeter['หน่วยน้ำ'])||0);
-        elecUnits=calcMeterDiff(parseFloat(curMeter['หน่วยไฟ'])||0,parseFloat(prevMeter['หน่วยไฟ'])||0);
+        waterOld=parseFloat(prevMeter['หน่วยน้ำ'])||0;waterNew=parseFloat(curMeter['หน่วยน้ำ'])||0;waterUnits=calcMeterDiff(waterNew,waterOld);
+        elecOld=parseFloat(prevMeter['หน่วยไฟ'])||0;elecNew=parseFloat(curMeter['หน่วยไฟ'])||0;elecUnits=calcMeterDiff(elecNew,elecOld);
       }
       const waterCost=Math.round(waterUnits*rWater);
       const elecCost=Math.round(elecUnits*rElec);
@@ -1426,7 +1419,7 @@ async function generateBills(){
       const carCost=nCars*rCar;const motoCost=nMotos*rMoto;
       const pDiscount=parseFloat(t['ส่วนลดส่วนบุคคล'])||0;
       const total=Math.max(0,rent+waterCost+elecCost+rCommon+carCost+motoCost-pDiscount);
-      const newRow={'เดือน/ปี':curMonth,'ห้องเลขที่':code,'รหัสผู้เช่า':t['รหัสผู้เช่า']||'','ค่าเช่า':rent,'ค่าน้ำ':waterCost,'ค่าไฟ':elecCost,'ค่าส่วนกลาง':rCommon,'ค่าจอดรถยนต์':carCost,'ค่าจอดมอเตอร์':motoCost,'ส่วนลด':pDiscount,'รวม':total,'สถานะ':'ค้างชำระ'};
+      const newRow={'เดือน/ปี':curMonth,'ห้องเลขที่':code,'รหัสผู้เช่า':t['รหัสผู้เช่า']||'','ค่าเช่า':rent,'ค่าน้ำ':waterCost,'ค่าไฟ':elecCost,'ค่าส่วนกลาง':rCommon,'ค่าจอดรถยนต์':carCost,'ค่าจอดมอเตอร์':motoCost,'ส่วนลด':pDiscount,'รวม':total,'สถานะ':'ค้างชำระ','หน่วยไฟเก่า':elecOld,'หน่วยไฟใหม่':elecNew,'หน่วยน้ำเก่า':waterOld,'หน่วยน้ำใหม่':waterNew};
       try{
         const res=await apiPost({sheet:'บิลรายเดือน',action:'append_row',data:newRow});
         if(res.success){DATA.bills.push(newRow);created++;}
@@ -1442,10 +1435,10 @@ async function generateBills(){
       const rent=getRentByRoom(code);
       const curMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===curMonth);
       const prevMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===prevMonth);
-      let waterUnits=0,elecUnits=0;
+      let waterUnits=0,elecUnits=0,elecOld=0,elecNew=0,waterOld=0,waterNew=0;
       if(curMeter&&prevMeter){
-        waterUnits=calcMeterDiff(parseFloat(curMeter['หน่วยน้ำ'])||0,parseFloat(prevMeter['หน่วยน้ำ'])||0);
-        elecUnits=calcMeterDiff(parseFloat(curMeter['หน่วยไฟ'])||0,parseFloat(prevMeter['หน่วยไฟ'])||0);
+        waterOld=parseFloat(prevMeter['หน่วยน้ำ'])||0;waterNew=parseFloat(curMeter['หน่วยน้ำ'])||0;waterUnits=calcMeterDiff(waterNew,waterOld);
+        elecOld=parseFloat(prevMeter['หน่วยไฟ'])||0;elecNew=parseFloat(curMeter['หน่วยไฟ'])||0;elecUnits=calcMeterDiff(elecNew,elecOld);
       }
       const waterCost=Math.round(waterUnits*rWater);
       const elecCost=Math.round(elecUnits*rElec);
@@ -1454,7 +1447,7 @@ async function generateBills(){
       const carCost=nCars*rCar;const motoCost=nMotos*rMoto;
       const pDiscount=tenant?parseFloat(tenant['ส่วนลดส่วนบุคคล'])||0:0;
       const total=Math.max(0,rent+waterCost+elecCost+rCommon+carCost+motoCost-pDiscount);
-      const data={'ค่าเช่า':rent,'ค่าน้ำ':waterCost,'ค่าไฟ':elecCost,'ค่าส่วนกลาง':rCommon,'ค่าจอดรถยนต์':carCost,'ค่าจอดมอเตอร์':motoCost,'ส่วนลด':pDiscount,'รวม':total};
+      const data={'ค่าเช่า':rent,'ค่าน้ำ':waterCost,'ค่าไฟ':elecCost,'ค่าส่วนกลาง':rCommon,'ค่าจอดรถยนต์':carCost,'ค่าจอดมอเตอร์':motoCost,'ส่วนลด':pDiscount,'รวม':total,'หน่วยไฟเก่า':elecOld,'หน่วยไฟใหม่':elecNew,'หน่วยน้ำเก่า':waterOld,'หน่วยน้ำใหม่':waterNew};
       const rowIndex=DATA.bills.indexOf(b)+1;
       try{
         const res=await apiPost({sheet:'บิลรายเดือน',action:'update_row',rowIndex,data});
