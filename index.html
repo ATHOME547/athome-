@@ -568,6 +568,7 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
       <div style="display:flex;gap:6px;margin-bottom:10px;">
         <button onclick="setRdChart('water')" id="rdChartW" style="flex:1;padding:6px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;border:none;font-family:var(--font);background:var(--blue);color:#000;"><i class="ti ti-droplet" style="font-size:13px;vertical-align:-2px;"></i> น้ำ</button>
         <button onclick="setRdChart('electric')" id="rdChartE" style="flex:1;padding:6px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;border:none;font-family:var(--font);background:var(--surface2);color:var(--text2);"><i class="ti ti-bolt" style="font-size:13px;vertical-align:-2px;"></i> ไฟ</button>
+        <button onclick="setRdChart('rent')" id="rdChartR" style="flex:1;padding:6px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;border:none;font-family:var(--font);background:var(--surface2);color:var(--text2);"><i class="ti ti-home" style="font-size:13px;vertical-align:-2px;"></i> ค่าห้อง</button>
       </div>
       <div style="position:relative;height:160px;"><canvas id="rdChart"></canvas></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;">
@@ -3500,20 +3501,45 @@ async function confirmChangeRoomType(){
 
 function setRdChart(t){
   rdChartType=t;
-  const wb=document.getElementById('rdChartW');const eb=document.getElementById('rdChartE');
+  const wb=document.getElementById('rdChartW');const eb=document.getElementById('rdChartE');const rb=document.getElementById('rdChartR');
   if(wb){wb.style.background=t==='water'?'var(--blue)':'var(--surface2)';wb.style.color=t==='water'?'#000':'var(--text2)';}
   if(eb){eb.style.background=t==='electric'?'var(--yellow)':'var(--surface2)';eb.style.color=t==='electric'?'#000':'var(--text2)';}
+  if(rb){rb.style.background=t==='rent'?'var(--purple)':'var(--surface2)';rb.style.color=t==='rent'?'#fff':'var(--text2)';}
   renderRdChart();
 }
 
 function renderRdChart(){
   const code=currentRoomCode;
-  const col=rdChartType==='water'?'หน่วยน้ำ':'หน่วยไฟ';
-  const color=rdChartType==='water'?'#4f8ef7':'#f7c94f';
   const MONTHS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const now=new Date();
-  const months7=[];const labels6=[];
-  // ดึง 7 เดือน เพื่อคำนวณ 6 ช่วง
+  const labels6=[];
+
+  if(rdChartType==='rent'){
+    const color='#a78bfa';
+    const vals=[];
+    for(let i=5;i>=0;i--){
+      let m=now.getMonth()+1-i;let y=now.getFullYear()+543;
+      while(m<1){m+=12;y--;}
+      const key=String(m).padStart(2,'0')+'/'+y;
+      const bill=DATA.bills.find(b=>normCode(b['ห้องเลขที่'])===normCode(code)&&(b['เดือน/ปี']||'')===key);
+      vals.push(bill?fmtN(bill['รวม']):0);
+      labels6.push(MONTHS[m-1]);
+    }
+    mkBarChart('rdChart',labels6,vals,color);
+    const valid=vals.filter(x=>x>0);
+    const avg=valid.length?Math.round(valid.reduce((a,b)=>a+b,0)/valid.length):0;
+    const max=valid.length?Math.max(...valid):0;
+    const min=valid.length?Math.min(...valid):0;
+    ['rdAvg','rdMax','rdMin'].forEach(id=>{document.getElementById(id).style.color=color;});
+    document.getElementById('rdAvg').textContent='฿'+fmt(avg);
+    document.getElementById('rdMax').textContent='฿'+fmt(max);
+    document.getElementById('rdMin').textContent='฿'+fmt(min);
+    return;
+  }
+
+  const col=rdChartType==='water'?'หน่วยน้ำ':'หน่วยไฟ';
+  const color=rdChartType==='water'?'#4f8ef7':'#f7c94f';
+  const months7=[];
   for(let i=6;i>=0;i--){
     let m=now.getMonth()+1-i;let y=now.getFullYear()+543;
     while(m<1){m+=12;y--;}
@@ -3521,16 +3547,10 @@ function renderRdChart(){
     const row=DATA.meter.find(r=>normCode(r['ห้องเลขที่'])===normCode(code)&&(r['เดือน/ปี']||'')===key);
     months7.push({val:row&&row[col]!==undefined&&row[col]!==''?parseFloat(row[col]):null, m, y});
   }
-  // คำนวณหน่วยที่ใช้ = เดือนนี้ - เดือนก่อน
   const units=[];
   for(let i=1;i<months7.length;i++){
-    const cur=months7[i].val;
-    const prev=months7[i-1].val;
-    if(cur!==null&&prev!==null&&cur>=prev){
-      units.push(calcMeterDiff(cur,prev));
-    }else{
-      units.push(0);
-    }
+    const cur=months7[i].val;const prev=months7[i-1].val;
+    units.push(cur!==null&&prev!==null&&cur>=prev?calcMeterDiff(cur,prev):0);
     labels6.push(MONTHS[months7[i].m-1]);
   }
   mkBarChart('rdChart',labels6,units,color);
