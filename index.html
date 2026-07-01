@@ -1193,7 +1193,7 @@ async function confirmPayment(){
   const amount=parseFloat(document.getElementById('payAmountInput').value)||0;
   if(amount<=0){alert('กรุณากรอกจำนวนเงิน');return;}
   const dateVal=document.getElementById('payDateInput').value;
-  const dateStr=dateVal?formatDateThai(new Date(dateVal)):'';
+  const dateStr=dateVal?formatDateThaiWithTime(new Date(dateVal+' '+new Date().toTimeString().slice(0,5))):'';
   const method=_payMethod==='transfer'?'โอน':'เงินสด';
   const total=fmtN(b['รวม']);
   const prevPaid=fmtN(b['ยอดชำระ']);
@@ -1536,7 +1536,7 @@ function renderTenants(){
 }
 
 function calcDur(s,e){if(!s)return'';try{const sd=parseThai(s);const ed=e?parseThai(e):new Date();const m=(ed.getFullYear()-sd.getFullYear())*12+(ed.getMonth()-sd.getMonth());if(m<1)return'<1 เดือน';if(m<12)return`${m} เดือน`;return`${Math.floor(m/12)} ปี ${m%12} เดือน`;}catch{return'';}}
-function parseThai(s){if(!s)return null;const p=s.split('/');if(p.length===3){let[d,m,y]=p;if(parseInt(y)>2500)y=parseInt(y)-543;return new Date(y,m-1,d);}return new Date(s);}
+function parseThai(s){if(!s)return null;const parts=s.trim().split(' ');const p=parts[0].split('/');if(p.length===3){let[d,m,y]=p;if(parseInt(y)>2500)y=parseInt(y)-543;const dt=new Date(y,m-1,d);if(parts[1]){const[hh,mm]=parts[1].split(':');dt.setHours(parseInt(hh)||0,parseInt(mm)||0);}return dt;}return new Date(s);}
 
 function renderMeterTable(){
   if(!dataLoaded){document.getElementById('meterTable').innerHTML='<div class="empty">ยังไม่ได้โหลดข้อมูล</div>';return;}
@@ -2090,7 +2090,7 @@ function renderDashboard(){
       const code=b['ห้องเลขที่']||'';
       const t=DATA.tenants.find(x=>normCode(x['ห้องเลขที่'])===normCode(code)&&!x['วันที่ออก']);
       const billAmt=fmtN(b['รวม']);
-      const payDate=(b['วันที่ชำระ']||'').replace(/\/\d{4}$/,'');
+      const payDate=(b['วันที่ชำระ']||'').replace(/\/\d{4}(\s+\d{2}:\d{2})?$/,'');
       const payMethod=b['ช่องทางชำระ']||'';
       const payInfo=[payDate,payMethod].filter(Boolean).join(' · ');
       return`<div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--surface2);gap:10px;">
@@ -3559,6 +3559,13 @@ function formatDateThai(d){
   const day=String(d.getDate()).padStart(2,'0');
   const y=d.getFullYear()<2500?d.getFullYear()+543:d.getFullYear();
   return day+'/'+m+'/'+y;
+}
+function formatDateThaiWithTime(d){
+  if(!d)return'—';
+  const base=formatDateThai(d);
+  const hh=String(d.getHours()).padStart(2,'0');
+  const mm=String(d.getMinutes()).padStart(2,'0');
+  return base+' '+hh+':'+mm;
 }
 
 /* AC MODAL */
