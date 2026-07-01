@@ -1207,6 +1207,7 @@ async function confirmPayment(){
     const res=await apiPost({sheet:'บิลรายเดือน',action:'update_row',rowIndex:billDetailIdx+1,data});
     if(res.success){
       Object.assign(b,data);
+      const _bi=DATA.bills.indexOf(b);if(_bi!==-1){DATA.bills.splice(_bi,1);DATA.bills.push(b);billDetailIdx=DATA.bills.length-1;}
       document.getElementById('paymentModal').remove();
       openBillDetail(billDetailIdx);
       renderBillsTable();renderDashboard();
