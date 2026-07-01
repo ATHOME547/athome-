@@ -2173,7 +2173,7 @@ function renderWaterChart(){
     wEl.innerHTML=mainWUnits>0?`
       <div style="flex:1;background:var(--surface2);border-radius:8px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:var(--blue);margin-bottom:3px;">เก็บจากผู้เช่า</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--blue);">฿${rWater}<span style="font-size:10px;font-weight:400;">/หน่วย</span></div><div style="font-size:11px;color:var(--text3);margin-top:2px;">ดึงจากอัตรา</div></div>
       <div style="flex:1;background:var(--surface2);border-radius:8px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:var(--text2);margin-bottom:3px;">ต้นทุนจริง</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--text);">฿${costPerUnit.toFixed(2)}<span style="font-size:10px;font-weight:400;">/หน่วย</span></div><div style="font-size:11px;color:var(--text3);margin-top:2px;">฿${fmt(mainWAmt)} ÷ ${fmt(mainWUnits)}</div></div>
-      <div style="flex:1;background:${profit>=0?'#1a2a1a':'#3a1a1a'};border-radius:8px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:${profit>=0?'var(--green)':'var(--red)'};margin-bottom:3px;">${profit>=0?'กำไร':'ขาดทุน'}</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:${profit>=0?'var(--green)':'var(--red)'};">฿${Math.abs(profit).toFixed(2)}<span style="font-size:10px;font-weight:400;">/หน่วย</span></div><div style="font-size:11px;color:${profit>=0?'var(--green)':'var(--red)'};margin-top:2px;">${profitAmt>=0?'':'- '}฿${fmt(Math.abs(profitAmt))}</div></div>`:'';
+      <div style="flex:1;background:${profitAmt>=0?'#1a2a1a':'#3a1a1a'};border-radius:8px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:${profitAmt>=0?'var(--green)':'var(--red)'};margin-bottom:3px;">${profitAmt>=0?'กำไร':'ขาดทุน'}</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:${profitAmt>=0?'var(--green)':'var(--red)'};">฿${Math.abs(profit).toFixed(2)}<span style="font-size:10px;font-weight:400;">/หน่วย</span></div><div style="font-size:11px;color:${profitAmt>=0?'var(--green)':'var(--red)'};margin-top:2px;">${profitAmt>=0?'':'- '}฿${fmt(Math.abs(profitAmt))}</div></div>`:'';
   }
 }
 
@@ -2208,7 +2208,7 @@ function renderElecChart(){
     eEl.innerHTML=mainEUnits>0?`
       <div style="flex:1;background:var(--surface2);border-radius:8px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:var(--yellow);margin-bottom:3px;">เก็บจากผู้เช่า</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--yellow);">฿${rElec}<span style="font-size:10px;font-weight:400;">/หน่วย</span></div><div style="font-size:11px;color:var(--text3);margin-top:2px;">ดึงจากอัตรา</div></div>
       <div style="flex:1;background:var(--surface2);border-radius:8px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:var(--text2);margin-bottom:3px;">ต้นทุนจริง</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--text);">฿${costPerUnit.toFixed(2)}<span style="font-size:10px;font-weight:400;">/หน่วย</span></div><div style="font-size:11px;color:var(--text3);margin-top:2px;">฿${fmt(mainEAmt)} ÷ ${fmt(mainEUnits)}</div></div>
-      <div style="flex:1;background:${profit>=0?'#1a2a1a':'#3a1a1a'};border-radius:8px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:${profit>=0?'var(--green)':'var(--red)'};margin-bottom:3px;">${profit>=0?'กำไร':'ขาดทุน'}</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:${profit>=0?'var(--green)':'var(--red)'};">฿${Math.abs(profit).toFixed(2)}<span style="font-size:10px;font-weight:400;">/หน่วย</span></div><div style="font-size:11px;color:${profit>=0?'var(--green)':'var(--red)'};margin-top:2px;">${profitAmt>=0?'':'- '}฿${fmt(Math.abs(profitAmt))}</div></div>`:'';
+      <div style="flex:1;background:${profitAmt>=0?'#1a2a1a':'#3a1a1a'};border-radius:8px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:${profitAmt>=0?'var(--green)':'var(--red)'};margin-bottom:3px;">${profitAmt>=0?'กำไร':'ขาดทุน'}</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:${profitAmt>=0?'var(--green)':'var(--red)'};">฿${Math.abs(profit).toFixed(2)}<span style="font-size:10px;font-weight:400;">/หน่วย</span></div><div style="font-size:11px;color:${profitAmt>=0?'var(--green)':'var(--red)'};margin-top:2px;">${profitAmt>=0?'':'- '}฿${fmt(Math.abs(profitAmt))}</div></div>`:'';
   }
 }
 
@@ -2973,6 +2973,7 @@ function renderTdPayChart(roomCode){
   const MONTHS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const now=new Date();
   const curM=now.getMonth()+1;const curY=now.getFullYear()+543;
+  const todayDay=now.getDate();
   let good=0,ok=0,bad=0;
   const bars=[];
   for(let i=11;i>=0;i--){
@@ -2982,6 +2983,8 @@ function renderTdPayChart(roomCode){
     const bill=DATA.bills.find(b=>normCode(b['ห้องเลขที่'])===normCode(roomCode)&&(b['เดือน/ปี']||'')===key);
     let color='var(--surface2)';let h=20;let tooltip='';
     const isCurMonth=(m===curM&&y===curY);
+    const isPrevMonth=(i===1);
+    const inGrace=isPrevMonth&&todayDay<=5;
     if(bill&&bill['สถานะ']&&bill['สถานะ']!=='ค้างชำระ'){
       const dayPaid=parseInt((bill['วันที่ชำระ']||'99').split('/')[0])||99;
       const payDisplay=(bill['วันที่ชำระ']||'').replace(/\/\d{4}(\s+\d{2}:\d{2})?$/,'');
@@ -2989,7 +2992,7 @@ function renderTdPayChart(roomCode){
       if(dayPaid<=5){color='var(--green)';h=70;good++;}
       else if(dayPaid<=10){color='var(--yellow)';h=45;ok++;}
       else{color='var(--red)';h=25;bad++;}
-    }else if(bill&&!isCurMonth){color='var(--red)';h=25;bad++;tooltip='ค้างชำระ';}
+    }else if(bill&&!isCurMonth&&!inGrace){color='var(--red)';h=25;bad++;tooltip='ค้างชำระ';}
     bars.push(`<div onclick="showPayBarTip(this,'${tooltip}')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;position:relative;">
       <div style="width:100%;height:${h}px;background:${color};border-radius:3px 3px 0 0;transition:opacity 0.1s;" onmouseenter="this.style.opacity='0.7'" onmouseleave="this.style.opacity='1'"></div>
       <div style="font-size:8px;color:var(--text3);">${MONTHS[m-1]}</div>
