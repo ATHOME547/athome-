@@ -2083,7 +2083,7 @@ function renderDashboard(){
     </div>`;
 
   // Recent payments
-  const paid=bills.filter(b=>b['สถานะ']&&b['สถานะ']!=='ค้างชำระ').sort((a,b)=>{const da=a['วันที่ชำระ']||'';const db=b['วันที่ชำระ']||'';if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;try{return parseThai(db)-parseThai(da);}catch{return db>da?1:-1;}}).slice(0,5);
+  const paid=bills.filter(b=>b['สถานะ']&&b['สถานะ']!=='ค้างชำระ').sort((a,b)=>{const da=a['วันที่ชำระ']||'';const db=b['วันที่ชำระ']||'';if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;try{const diff=parseThai(db)-parseThai(da);if(diff!==0)return diff;return DATA.bills.indexOf(b)-DATA.bills.indexOf(a);}catch{return db>da?1:-1;}}).slice(0,5);
   const rp=document.getElementById('recentPayments');
   if(rp){
     rp.innerHTML=paid.length?paid.map(b=>{
