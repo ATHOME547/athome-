@@ -1207,7 +1207,7 @@ async function confirmPayment(){
     const res=await apiPost({sheet:'บิลรายเดือน',action:'update_row',rowIndex:billDetailIdx+1,data});
     if(res.success){
       Object.assign(b,data);
-      const _bi=DATA.bills.indexOf(b);if(_bi!==-1){DATA.bills.splice(_bi,1);DATA.bills.push(b);billDetailIdx=DATA.bills.length-1;}
+      b._payMs=Date.now();
       document.getElementById('paymentModal').remove();
       openBillDetail(billDetailIdx);
       renderBillsTable();renderDashboard();
@@ -2087,7 +2087,7 @@ function renderDashboard(){
     </div>`;
 
   // Recent payments — ดึงจากทุกเดือน ไม่จำกัดแค่เดือนที่กำลังดู
-  const paid=DATA.bills.filter(b=>b['สถานะ']&&b['สถานะ']!=='ค้างชำระ').sort((a,b)=>{const da=a['วันที่ชำระ']||'';const db=b['วันที่ชำระ']||'';if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;try{const diff=parseThai(db)-parseThai(da);if(diff!==0)return diff;return DATA.bills.indexOf(b)-DATA.bills.indexOf(a);}catch{return db>da?1:-1;}}).slice(0,5);
+  const paid=DATA.bills.filter(b=>b['สถานะ']&&b['สถานะ']!=='ค้างชำระ').sort((a,b)=>{if(b._payMs||a._payMs)return(b._payMs||0)-(a._payMs||0);const da=a['วันที่ชำระ']||'';const db=b['วันที่ชำระ']||'';if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;try{return parseThai(db)-parseThai(da);}catch{return db>da?1:-1;}}).slice(0,5);
   const rp=document.getElementById('recentPayments');
   if(rp){
     rp.innerHTML=paid.length?paid.map(b=>{
