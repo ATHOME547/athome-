@@ -2972,22 +2972,26 @@ async function saveVeh(){
 function renderTdPayChart(roomCode){
   const MONTHS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const now=new Date();
+  const curM=now.getMonth()+1;const curY=now.getFullYear()+543;
   let good=0,ok=0,bad=0;
   const bars=[];
   for(let i=11;i>=0;i--){
-    let m=now.getMonth()+1-i;let y=now.getFullYear()+543;
+    let m=curM-i;let y=curY;
     while(m<1){m+=12;y--;}
     const key=String(m).padStart(2,'0')+'/'+y;
     const bill=DATA.bills.find(b=>normCode(b['ห้องเลขที่'])===normCode(roomCode)&&(b['เดือน/ปี']||'')===key);
-    let color='var(--surface2)';let h=20;let dayPaid=0;
+    let color='var(--surface2)';let h=20;let tooltip='';
+    const isCurMonth=(m===curM&&y===curY);
     if(bill&&bill['สถานะ']&&bill['สถานะ']!=='ค้างชำระ'){
-      dayPaid=parseInt((bill['วันที่ชำระ']||'99').split('/')[0])||99;
+      const dayPaid=parseInt((bill['วันที่ชำระ']||'99').split('/')[0])||99;
+      const payDisplay=(bill['วันที่ชำระ']||'').replace(/\/\d{4}(\s+\d{2}:\d{2})?$/,'');
+      tooltip=payDisplay?'ชำระ '+payDisplay:'ชำระแล้ว';
       if(dayPaid<=5){color='var(--green)';h=70;good++;}
       else if(dayPaid<=10){color='var(--yellow)';h=45;ok++;}
       else{color='var(--red)';h=25;bad++;}
-    }else if(bill){color='var(--red)';h=25;bad++;}
-    bars.push(`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">
-      <div style="width:100%;height:${h}px;background:${color};border-radius:3px 3px 0 0;"></div>
+    }else if(bill&&!isCurMonth){color='var(--red)';h=25;bad++;tooltip='ค้างชำระ';}
+    bars.push(`<div onclick="showPayBarTip(this,'${tooltip}')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;position:relative;">
+      <div style="width:100%;height:${h}px;background:${color};border-radius:3px 3px 0 0;transition:opacity 0.1s;" onmouseenter="this.style.opacity='0.7'" onmouseleave="this.style.opacity='1'"></div>
       <div style="font-size:8px;color:var(--text3);">${MONTHS[m-1]}</div>
     </div>`);
   }
@@ -2995,6 +2999,16 @@ function renderTdPayChart(roomCode){
   if(chart)chart.innerHTML=bars.join('');
   const g=document.getElementById('tdPayGood');const ok2=document.getElementById('tdPayOk');const b=document.getElementById('tdPayBad');
   if(g)g.textContent=good;if(ok2)ok2.textContent=ok;if(b)b.textContent=bad;
+}
+function showPayBarTip(el,text){
+  document.querySelectorAll('.pay-bar-tip').forEach(x=>x.remove());
+  if(!text)return;
+  const tip=document.createElement('div');
+  tip.className='pay-bar-tip';
+  tip.textContent=text;
+  tip.style.cssText='position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid var(--border2);color:var(--text);font-size:10px;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:999;pointer-events:none;';
+  el.appendChild(tip);
+  setTimeout(()=>tip.remove(),2500);
 }
 
 /* MOVE OUT */
