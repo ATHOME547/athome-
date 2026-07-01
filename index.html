@@ -267,6 +267,8 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
             <span style="color:var(--yellow);opacity:0.4;">░ มิเตอร์หลัก</span>
           </div>
         </div>
+        <div class="section-title" style="display:flex;align-items:center;gap:6px;"><i class="ti ti-parking" style="font-size:16px;color:var(--text2);" aria-hidden="true"></i><span style="color:var(--text2);">ช่องจอดรถ</span></div>
+        <div class="chart-card" style="padding:14px;" id="dashParkingCard"></div>
       </div>
       <div id="dashYearView" style="display:none;">
         <div class="month-picker" style="margin-bottom:12px;">
@@ -2110,6 +2112,7 @@ function renderDashboard(){
 
   renderWaterChart();
   renderElecChart();
+  renderParkingStatus();
 }
 
 let dashWaterUnit='unit';
@@ -2214,6 +2217,65 @@ function renderElecChart(){
       <div style="flex:1;background:var(--surface2);border-radius:8px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:var(--text2);margin-bottom:3px;">ต้นทุนจริง</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--text);">฿${costPerUnit.toFixed(2)}<span style="font-size:10px;font-weight:400;">/หน่วย</span></div><div style="font-size:11px;color:var(--text3);margin-top:2px;">฿${fmt(mainEAmt)} ÷ ${fmt(mainEUnits)}</div></div>
       <div style="flex:1;background:${profitAmt>=0?'#1a2a1a':'#3a1a1a'};border-radius:8px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:${profitAmt>=0?'var(--green)':'var(--red)'};margin-bottom:3px;">${profitAmt>=0?'กำไร':'ขาดทุน'}</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:${profitAmt>=0?'var(--green)':'var(--red)'};">฿${Math.abs(profit).toFixed(2)}<span style="font-size:10px;font-weight:400;">/หน่วย</span></div><div style="font-size:11px;color:${profitAmt>=0?'var(--green)':'var(--red)'};margin-top:2px;">${profitAmt>=0?'':'- '}฿${fmt(Math.abs(profitAmt))}</div></div>`:'';
   }
+}
+
+function showParkTip(el,room){
+  document.querySelectorAll('.park-tip').forEach(x=>x.remove());
+  const tip=document.createElement('div');
+  tip.className='park-tip';
+  tip.textContent=room;
+  tip.style.cssText='position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#1a1a3a;border:1px solid var(--border);color:var(--text);font-size:10px;padding:3px 7px;border-radius:5px;white-space:nowrap;z-index:99;pointer-events:none;';
+  el.appendChild(tip);
+  setTimeout(()=>tip.remove(),2500);
+}
+
+function renderParkingStatus(){
+  const el=document.getElementById('dashParkingCard');
+  if(!el)return;
+  const rates=getRatesLocal();
+  const carTotal=parseInt(rates.r_car_slots||14);
+  const motoTotal=parseInt(rates.r_moto_slots||41);
+  const carMap={};const motoMap={};
+  DATA.tenants.filter(t=>!t['วันที่ออก']).forEach(t=>{
+    const code=(t['ห้องเลขที่']||'').trim();
+    (t['รถยนต์ล็อก']||'').split(',').forEach(s=>{const n=parseInt(s.trim());if(n)carMap[n]=code;});
+    (t['จักยานยนต์ล็อก']||'').split(',').forEach(s=>{const n=parseInt(s.trim());if(n)motoMap[n]=code;});
+  });
+  const carUsed=Object.keys(carMap).length;
+  const motoUsed=Object.keys(motoMap).length;
+  const carFree=carTotal-carUsed;
+  const motoFree=motoTotal-motoUsed;
+  function buildParkGrid(total,usedMap){
+    let h='<div style="display:flex;flex-wrap:wrap;gap:5px;">';
+    for(let i=1;i<=total;i++){
+      const room=usedMap[i];
+      h+=room
+        ?`<div onclick="showParkTip(this,'${room}')" style="width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;cursor:pointer;position:relative;background:#2a0d0d;color:var(--red);border:1px solid #7f1d1d;">${i}</div>`
+        :`<div style="width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:#0d2a1a;color:var(--green);border:1px solid #166534;">${i}</div>`;
+    }
+    return h+'</div>';
+  }
+  el.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:12px;">
+      <div style="background:var(--surface2);border-radius:8px;padding:7px 8px;text-align:center;"><div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--green);">${carFree}</div><div style="font-size:9px;color:var(--text3);margin-top:2px;">รถยนต์ว่าง</div></div>
+      <div style="background:var(--surface2);border-radius:8px;padding:7px 8px;text-align:center;"><div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--red);">${carUsed}</div><div style="font-size:9px;color:var(--text3);margin-top:2px;">รถยนต์ไม่ว่าง</div></div>
+      <div style="background:var(--surface2);border-radius:8px;padding:7px 8px;text-align:center;"><div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--green);">${motoFree}</div><div style="font-size:9px;color:var(--text3);margin-top:2px;">มอไซค์ว่าง</div></div>
+      <div style="background:var(--surface2);border-radius:8px;padding:7px 8px;text-align:center;"><div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--red);">${motoUsed}</div><div style="font-size:9px;color:var(--text3);margin-top:2px;">มอไซค์ไม่ว่าง</div></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;"><i class="ti ti-car" style="font-size:14px;" aria-hidden="true"></i> รถยนต์ (${carTotal} ล็อก)</span>
+      <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:#0d2a1a;color:var(--green);border:1px solid #166534;">ว่าง ${carFree} / ${carTotal}</span>
+    </div>
+    ${buildParkGrid(carTotal,carMap)}
+    <div style="border-top:1px solid var(--border);margin:10px 0;"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;"><i class="ti ti-motorbike" style="font-size:14px;" aria-hidden="true"></i> มอเตอร์ไซค์ (${motoTotal} ล็อก)</span>
+      <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:#0d2a1a;color:var(--green);border:1px solid #166534;">ว่าง ${motoFree} / ${motoTotal}</span>
+    </div>
+    ${buildParkGrid(motoTotal,motoMap)}
+    <div style="display:flex;gap:12px;font-size:10px;color:var(--text3);margin-top:8px;">
+      <span style="color:var(--green);">█ ว่าง</span><span style="color:var(--red);">█ ไม่ว่าง (กดดูห้อง)</span>
+    </div>`;
 }
 
 function renderDashYear(){
