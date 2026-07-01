@@ -1193,7 +1193,9 @@ async function confirmPayment(){
   const amount=parseFloat(document.getElementById('payAmountInput').value)||0;
   if(amount<=0){alert('กรุณากรอกจำนวนเงิน');return;}
   const dateVal=document.getElementById('payDateInput').value;
-  const dateStr=dateVal?formatDateThaiWithTime(new Date(dateVal+' '+new Date().toTimeString().slice(0,5))):'';
+  const _now=new Date();const _dp=dateVal.split('-').map(Number);
+  const dateStr=dateVal?formatDateThaiWithTime(new Date(_dp[0],_dp[1]-1,_dp[2],_now.getHours(),_now.getMinutes())):'';
+
   const method=_payMethod==='transfer'?'โอน':'เงินสด';
   const total=fmtN(b['รวม']);
   const prevPaid=fmtN(b['ยอดชำระ']);
@@ -2090,7 +2092,7 @@ function renderDashboard(){
       const code=b['ห้องเลขที่']||'';
       const t=DATA.tenants.find(x=>normCode(x['ห้องเลขที่'])===normCode(code)&&!x['วันที่ออก']);
       const billAmt=fmtN(b['รวม']);
-      const payDate=(b['วันที่ชำระ']||'').replace(/\/\d{4}(\s+\d{2}:\d{2})?$/,'');
+      const payDate=(b['วันที่ชำระ']||'').replace(/\/\d{4}(\s+\d{1,2}[:.]\d{2})?$/,'');
       const payMethod=b['ช่องทางชำระ']||'';
       const payInfo=[payDate,payMethod].filter(Boolean).join(' · ');
       return`<div style="display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--surface2);gap:10px;">
