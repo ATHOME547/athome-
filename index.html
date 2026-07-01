@@ -965,10 +965,10 @@ function renderBillsTable(){
   }
   allRooms.forEach(room=>{
     const code=room['ห้องเลขที่']||'';
-    if(q&&!JSON.stringify(room).toLowerCase().includes(q)&&!getTName(code).toLowerCase().includes(q))return;
+    const b=bills.find(x=>normCode(x['ห้องเลขที่'])===normCode(code));
+    if(q&&!JSON.stringify(room).toLowerCase().includes(q)&&!getTName(code).toLowerCase().includes(q)&&!(b&&JSON.stringify(b).toLowerCase().includes(q)))return;
     const zone=code.trim().toUpperCase().charAt(0);
     if(zone!==lastZone){html+=`<div style="font-size:10px;font-weight:600;margin:10px 0 6px 2px;color:${zoneColors[zone]||'var(--text3)'};">${zoneLabels[zone]||'โซน '+zone}</div>`;lastZone=zone;}
-    const b=bills.find(x=>normCode(x['ห้องเลขที่'])===normCode(code));
     const tenant=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===normCode(code)&&!t['วันที่ออก']);
     if(b){
       const globalIdx=DATA.bills.indexOf(b);
