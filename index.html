@@ -3776,12 +3776,12 @@ function renderRooms2(){
         const d=parseDateThai(acDate);
         const now=new Date();
         const months=d?Math.floor((now-d)/(1000*60*60*24*30)):999;
-        if(months>=6){
+        if(months>=12){
           acBorder='danger-ac';
           acSub=`<div style="font-size:11px;color:var(--red);"><i class="ti ti-snowflake" style="font-size:14px;vertical-align:-2px;"></i> เกินกำหนดล้างแอร์</div>`;
-        }else if(months>=5){
+        }else if(months>=7){
           acBorder='warn-ac';
-          acSub=`<div style="font-size:11px;color:var(--yellow);"><i class="ti ti-snowflake" style="font-size:14px;vertical-align:-2px;"></i> ใกล้ถึงเวลาล้างแอร์</div>`;
+          acSub=`<div style="font-size:11px;color:var(--yellow);"><i class="ti ti-snowflake" style="font-size:14px;vertical-align:-2px;"></i> ถึงกำหนดล้างแอร์</div>`;
         }else{
           acSub=`<div style="font-size:11px;color:var(--text2);"><i class="ti ti-snowflake" style="font-size:14px;vertical-align:-2px;color:var(--purple);"></i> แอร์</div>`;
         }
