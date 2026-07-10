@@ -569,6 +569,10 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
     <!-- ล้างแอร์ -->
     <div id="rdAcSection"></div>
 
+    <!-- ซ่อมบำรุง -->
+    <div id="rdMaintAcSection"></div>
+    <div id="rdMaintRoomSection"></div>
+
     <!-- กราฟ -->
     <div class="section-title" style="margin-top:4px;"><i class="ti ti-chart-bar" style="font-size:14px;vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>ประวัติ 6 เดือน</div>
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px;">
@@ -717,6 +721,24 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
   </div>
 </div>
 
+<!-- MAINTENANCE MODAL -->
+<div id="maintModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:flex-end;">
+  <div style="background:var(--surface);border-radius:16px 16px 0 0;border-top:1px solid var(--border2);padding:20px;width:100%;box-sizing:border-box;">
+    <div style="display:flex;justify-content:center;margin-bottom:12px;"><div style="width:36px;height:4px;background:var(--border2);border-radius:2px;"></div></div>
+    <div id="maintModalTitle" style="font-size:15px;font-weight:700;margin-bottom:14px;"></div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">วันที่</div>
+    <input type="date" id="maintDateInput" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:9px 12px;border-radius:8px;font-family:var(--font);font-size:13px;width:100%;box-sizing:border-box;margin-bottom:12px;">
+    <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">รายละเอียด</div>
+    <textarea id="maintDescInput" rows="2" placeholder="เช่น เปลี่ยนก๊อกน้ำห้องน้ำ..." style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:9px 12px;border-radius:8px;font-family:var(--font);font-size:13px;width:100%;box-sizing:border-box;margin-bottom:12px;resize:none;"></textarea>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">ค่าใช้จ่าย (บาท)</div>
+    <input type="number" inputmode="numeric" id="maintCostInput" placeholder="0" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:9px 12px;border-radius:8px;font-family:var(--mono);font-size:13px;width:100%;box-sizing:border-box;margin-bottom:16px;">
+    <div style="display:flex;gap:10px;">
+      <button onclick="closeMaintModal()" style="flex:1;padding:13px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);border-radius:10px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;">ยกเลิก</button>
+      <button onclick="confirmAddMaint()" style="flex:2;padding:13px;background:var(--green);color:#000;border:none;border-radius:10px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">บันทึก</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SHEET_ID='1K7z_OzHJDfi0__9-gfdFQkXRVAo_zmFi9MQIl6MtU8A';
 const BASE=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=`;
@@ -727,7 +749,7 @@ async function apiPost(payload){
   const res=await fetch(API_URL,{method:'POST',body:JSON.stringify(payload)});
   return await res.json();
 }
-let DATA={rooms:[],tenants:[],bills:[],meter:[],extraIncome:[]};
+let DATA={rooms:[],tenants:[],bills:[],meter:[],extraIncome:[],maintenance:[]};
 let charts={};
 let dataLoaded=false;
 
@@ -842,7 +864,9 @@ async function loadData(){
   document.getElementById('fetchWarning').innerHTML='';
   try{
     const[rooms,tenants,bills,meter,extraIncome]=await Promise.all([fetchSheet('ห้องพัก'),fetchSheet('ผู้เช่า'),fetchSheet('บิลรายเดือน'),fetchSheet('มิเตอร์'),fetchSheet('รายได้เสริม')]);
-    DATA={rooms,tenants,bills,meter,extraIncome};dataLoaded=true;
+    let maintenance=[];
+    try{maintenance=await fetchSheet('ซ่อมบำรุง');}catch(e){console.warn('ซ่อมบำรุง sheet not found yet:',e.message);}
+    DATA={rooms,tenants,bills,meter,extraIncome,maintenance};dataLoaded=true;
     populateFilters();
     document.getElementById('loadingIndicator').style.display='none';
     document.getElementById('dashContent').style.display='block';
@@ -3485,6 +3509,10 @@ function showRoomDetailPage(){
     document.getElementById('rdAcSection').innerHTML = '';
   }
 
+  if(isAir) renderMaintSection(code,'แอร์','rdMaintAcSection','var(--blue)','ti-snowflake','เพิ่มรายการซ่อมแอร์');
+  else document.getElementById('rdMaintAcSection').innerHTML = '';
+  renderMaintSection(code,'ห้อง','rdMaintRoomSection','var(--purple)','ti-tools','เพิ่มรายการซ่อมห้อง');
+
   setRdChart('water');
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-room-detail').classList.add('active');
@@ -3716,6 +3744,70 @@ async function confirmAcClean(){
   }
 }
 
+/* MAINTENANCE HISTORY */
+const MAINT_MONTHS_SHORT=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+function renderMaintSection(code,type,elId,color,icon,btnLabel){
+  const el=document.getElementById(elId);
+  if(!el)return;
+  const items=DATA.maintenance.filter(m=>normCode(m['ห้องเลขที่'])===normCode(code)&&(m['ประเภท']||'')===type)
+    .slice().sort((a,b)=>{
+      const da=parseDateThai(a['วันที่']);const db=parseDateThai(b['วันที่']);
+      return(db?db.getTime():0)-(da?da.getTime():0);
+    });
+  let listHtml='';
+  if(items.length){
+    listHtml=`<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:4px 14px;margin-bottom:10px;">
+      ${items.map((m,i)=>{
+        const d=parseDateThai(m['วันที่']);
+        const dd=d?String(d.getDate()).padStart(2,'0'):'—';
+        const mon=d?MAINT_MONTHS_SHORT[d.getMonth()]:'';
+        const yy=d?String(d.getFullYear()).slice(-2):'';
+        const cost=parseFloat(m['ค่าใช้จ่าย'])||0;
+        const border=i<items.length-1?'border-bottom:1px solid var(--border2);':'';
+        return`<div style="display:flex;gap:10px;align-items:center;padding:10px 0;${border}">
+          <div style="width:34px;flex-shrink:0;text-align:center;">
+            <div style="font-size:15px;font-weight:700;color:${color};">${dd}</div>
+            <div style="font-size:9px;color:var(--text3);">${mon} ${yy}</div>
+          </div>
+          <div style="flex:1;font-size:12.5px;color:var(--text);">${m['รายละเอียด']||''}</div>
+          ${cost>0?`<div style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--yellow);flex-shrink:0;">฿${fmt(cost)}</div>`:''}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+  const btnHtml=`<button onclick="showMaintModal('${code}','${type}')" style="width:100%;padding:10px;background:transparent;color:${color};border:1px dashed var(--border2);border-radius:10px;font-family:var(--font);font-size:12.5px;font-weight:600;cursor:pointer;margin-bottom:14px;"><i class="ti ti-plus" style="font-size:13px;vertical-align:-2px;" aria-hidden="true"></i> ${btnLabel}</button>`;
+  el.innerHTML=`<div class="section-title" style="display:flex;align-items:center;gap:6px;"><i class="ti ${icon}" style="font-size:14px;" aria-hidden="true"></i> ${type==='แอร์'?'ประวัติซ่อมบำรุงแอร์':'ประวัติซ่อมบำรุงห้อง'}</div>${listHtml}${btnHtml}`;
+}
+
+let maintModalRoom='';let maintModalType='';
+function showMaintModal(code,type){
+  maintModalRoom=code;maintModalType=type;
+  const today=new Date();
+  const yyyy=today.getFullYear();const mm=String(today.getMonth()+1).padStart(2,'0');const dd=String(today.getDate()).padStart(2,'0');
+  document.getElementById('maintModalTitle').textContent=type==='แอร์'?'เพิ่มรายการซ่อมแอร์':'เพิ่มรายการซ่อมห้อง';
+  document.getElementById('maintDateInput').value=`${yyyy}-${mm}-${dd}`;
+  document.getElementById('maintDescInput').value='';
+  document.getElementById('maintCostInput').value='';
+  document.getElementById('maintModal').style.display='flex';
+}
+function closeMaintModal(){document.getElementById('maintModal').style.display='none';}
+async function confirmAddMaint(){
+  const dateVal=document.getElementById('maintDateInput').value;
+  const desc=document.getElementById('maintDescInput').value.trim();
+  const cost=parseFloat(document.getElementById('maintCostInput').value)||0;
+  if(!dateVal){alert('กรุณาเลือกวันที่');return;}
+  if(!desc){alert('กรุณากรอกรายละเอียด');return;}
+  const dateStr=formatDateThai(new Date(dateVal));
+  const newRow={'ห้องเลขที่':maintModalRoom,'ประเภท':maintModalType,'วันที่':dateStr,'รายละเอียด':desc,'ค่าใช้จ่าย':cost};
+  try{
+    const res=await apiPost({sheet:'ซ่อมบำรุง',action:'append_row',data:newRow});
+    if(res.success){
+      DATA.maintenance.push(newRow);
+      closeMaintModal();
+      showRoomDetailPage();
+    }else alert('บันทึกไม่สำเร็จ: '+(res.error||''));
+  }catch(e){alert('เกิดข้อผิดพลาด: '+e.message);}
+}
 
 /* ===== ROOMS PAGE V2 ===== */
 let roomZone2='ALL';
