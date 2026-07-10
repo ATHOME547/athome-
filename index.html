@@ -451,8 +451,8 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
       <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:8px;" id="tdPayChart"></div>
       <div style="display:flex;gap:8px;font-size:10px;color:var(--text3);justify-content:center;">
         <span><span style="color:var(--green);">●</span> วันที่ 1-5</span>
-        <span><span style="color:var(--yellow);">●</span> วันที่ 6-10</span>
-        <span><span style="color:var(--red);">●</span> 10+/ค้าง</span>
+        <span><span style="color:var(--yellow);">●</span> วันที่ 6-15</span>
+        <span><span style="color:var(--red);">●</span> 15+/ค้าง</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;">
         <div style="background:var(--surface2);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:10px;color:var(--text2);">ดีมาก</div><div id="tdPayGood" style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green);"></div></div>
@@ -3060,7 +3060,7 @@ function renderTdPayChart(roomCode){
       const payDisplay=(bill['วันที่ชำระ']||'').replace(/\/\d{4}(\s+\d{2}:\d{2})?$/,'');
       tooltip=payDisplay?'ชำระ '+payDisplay:'ชำระแล้ว';
       if(dayPaid<=5){color='var(--green)';h=70;good++;}
-      else if(dayPaid<=10){color='var(--yellow)';h=45;ok++;}
+      else if(dayPaid<=15){color='var(--yellow)';h=45;ok++;}
       else{color='var(--red)';h=25;bad++;}
     }else if(bill&&!isCurMonth&&!inGrace){color='var(--red)';h=25;bad++;tooltip='ค้างชำระ';}
     bars.push(`<div onclick="showPayBarTip(this,'${tooltip}')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;position:relative;">
