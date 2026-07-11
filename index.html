@@ -967,7 +967,7 @@ function renderBillsTable(){
     else{genBtn.style.display='none';}
   }
   let totalAmt=0,paidAmt=0,unpaidAmt=0;
-  bills.forEach(b=>{const t=fmtN(b['รวม']);totalAmt+=t;if(b['สถานะ']==='ชำระแล้ว')paidAmt+=t;else unpaidAmt+=t;});
+  bills.forEach(b=>{const t=fmtN(b['รวม']);totalAmt+=t;if(b['สถานะ']==='ชำระแล้ว'){paidAmt+=t;}else{const p=fmtN(b['ยอดชำระ']);paidAmt+=p;unpaidAmt+=(t-p);}});
   document.getElementById('billSummary').innerHTML=`
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 8px;text-align:center;"><div style="font-size:10px;color:var(--text2);">ทั้งหมด</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--text);">${bills.length} ห้อง</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--yellow);margin-top:3px;">฿${fmt(totalAmt)}</div></div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 8px;text-align:center;"><div style="font-size:10px;color:var(--text2);">ชำระแล้ว</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--text);">${paid} ห้อง</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green);margin-top:3px;">฿${fmt(paidAmt)}</div></div>
