@@ -165,18 +165,6 @@ tr:last-child td{border-bottom:none;}
   .tenant-list{display:grid;grid-template-columns:repeat(2,1fr);}
   .room-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));}
 }
-/* DESKTOP FRAME — center the mobile layout as a fixed-width "phone" column on wide screens */
-@media(min-width:900px){
-  body{background:#05060a;align-items:center;}
-  header,.scroll-area,.bottom-nav{width:480px;max-width:100%;}
-  .scroll-area{background:var(--bg);}
-  header,.bottom-nav{box-shadow:0 0 0 1px var(--border);}
-  .stat-row{grid-template-columns:repeat(2,1fr);}
-  .stat-card.wide{grid-column:1/-1;}
-  .page{padding:16px;}
-  .tenant-list{grid-template-columns:1fr;}
-  .room-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));}
-}
 .inline-input{flex:1;background:transparent;border:none;color:var(--text);font-size:13px;font-family:var(--font);outline:none;}
 .inline-input::placeholder{color:var(--text3);}
 .room-list-row{background:var(--surface);border-radius:10px;padding:11px 14px;margin-bottom:6px;border:1px solid var(--border2);cursor:pointer;display:flex;align-items:center;gap:12px;}
