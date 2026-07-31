@@ -2942,7 +2942,8 @@ function addRoomToTenant(){
       'รหัสผู้เช่า':id,'ชื่อ-นามสกุล':name,'เบอร์โทร':phone,
       'ห้องเลขที่':roomCode,'วันที่เข้าอยู่':dateIn,
       'รถยนต์ล็อก':'','จักยานยนต์ล็อก':'','วันที่ออก':'',
-      'หมายเหตุ':t['หมายเหตุ']||'','เงินมัดจำ':deposit
+      'หมายเหตุ':t['หมายเหตุ']||'','เงินมัดจำ':deposit,
+      'LINE User ID':t['LINE User ID']||'','ส่วนลดส่วนบุคคล':t['ส่วนลดส่วนบุคคล']||''
     };
     try{
       const res=await apiPost({sheet:'ผู้เช่า',action:'append_row',data:newRow});
