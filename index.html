@@ -1084,11 +1084,10 @@ function openBillDetail(idx){
   }
   const infoEl=document.getElementById('bdNewInfo');
   const proEl=document.getElementById('bdProrateSection');
-  const showPro=isPartial||billProrate<100;
   infoEl.style.display=isPartial?'block':'none';
   if(isPartial)infoEl.innerHTML='ℹ️ '+partialReason;
-  proEl.style.display=showPro?'block':'none';
-  if(showPro)renderProrateButtons();
+  proEl.style.display='block';
+  renderProrateButtons();
   const editActionsEl=document.getElementById('bdEditActions');
   if(editActionsEl)editActionsEl.style.display=b['สถานะ']==='ชำระแล้ว'?'none':'flex';
   updateBillItems();
