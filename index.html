@@ -3222,7 +3222,8 @@ function renderTenants2(){
     const dur=calcDur2(earliest,isCurrent?null:t['วันที่ออก']);
 
     // Room + vehicle badges
-    const roomBadges=rooms.map(r=>{
+    const badgeRooms=isCurrent?rooms.filter(r=>!r['วันที่ออก']):rooms;
+    const roomBadges=badgeRooms.map(r=>{
       const code=r['ห้องเลขที่']||'';
       const cars=(r['รถยนต์ล็อก']||'').split(',').filter(Boolean);
       const motos=(r['จักยานยนต์ล็อก']||'').split(',').filter(Boolean);
