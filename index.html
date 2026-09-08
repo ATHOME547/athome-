@@ -1009,7 +1009,7 @@ function renderBillsTable(){
       const name=getTName(code);
       const total=fmtN(b['รวม']);
       const pct=parsePctField(b['เปอร์เซ็นต์เดือนแรก']);
-      const proTag=pct<100?`<span style="background:#1a1a3a;color:var(--blue);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;">ไม่เต็มเดือน ${pct}%</span>`:'';
+      const proTag=pct<100?`<span style="background:#1a1a3a;color:var(--blue);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;">ไม่เต็มเดือน ${pct}%</span>`:pct>100?`<span style="background:#3a1a1a;color:var(--red);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;">ค่าใช้จ่ายเพิ่มเติม ${pct}%</span>`:'';
       const pDiscount=fmtN(b['ส่วนลด']);
       const discTag=pDiscount>0?`<span style="background:#2a1a3a;color:var(--purple);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;">-฿${fmt(pDiscount)}</span>`:'';
       const st=billStatusBadge(b);
@@ -1419,7 +1419,8 @@ function updateBillItems(){
   // "เต็มจำนวน" reference for the prorate strikethrough, back-derived from the prorated value — informational only.
   const backFull=v=>pctF>0?Math.round(v/pctF):v;
   const rentFull=backFull(rent),commonFull=backFull(common),carFull=backFull(car),motoFull=backFull(moto);
-  const badge=isProrate?`<span style="font-size:9px;background:#1a1a3a;color:var(--blue);padding:2px 6px;border-radius:4px;font-weight:600;margin-left:4px;">${billProrate}%</span>`:'';
+  const badgeText=billProrate<100?billProrate+'%':billProrate>100?'ค่าใช้จ่ายเพิ่มเติม '+billProrate+'%':'';
+  const badge=isProrate?`<span style="font-size:9px;background:${billProrate>100?'#3a1a1a':'#1a1a3a'};color:${billProrate>100?'var(--red)':'var(--blue)'};padding:2px 6px;border-radius:4px;font-weight:600;margin-left:4px;">${badgeText}</span>`:'';
   function itemRow(label,val,orig,sub,showBadge){
     const hasOrig=showBadge&&isProrate&&orig!==val;
     return`<div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--surface2);gap:8px;">
