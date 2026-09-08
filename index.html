@@ -344,7 +344,9 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
       <div id="bdNewInfo" style="display:none;background:#1a1a3a;border:1px solid rgba(79,142,247,0.3);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--blue);"></div>
       <div id="bdProrateSection" style="display:none;">
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">คิดค่าเช่ารายเดือน (ค่าห้อง / ส่วนกลาง / จอดรถ)</div>
-        <div id="bdProrateButtons" style="display:flex;gap:6px;margin-bottom:4px;"></div>
+        <div id="bdProrateButtons" style="display:flex;gap:6px;margin-bottom:8px;"></div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px;">ออกกะทันหันไม่แจ้งล่วงหน้า</div>
+        <div id="bdProrateButtonsExtra" style="display:flex;gap:6px;margin-bottom:4px;"></div>
         <div style="font-size:11px;color:var(--text3);margin-bottom:12px;">น้ำ/ไฟ คิดตามมิเตอร์จริงเสมอ</div>
       </div>
       <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">รายการค่าใช้จ่าย</div>
@@ -1315,9 +1317,13 @@ function closeBillDetail(){
 
 function renderProrateButtons(){
   const btnsEl=document.getElementById('bdProrateButtons');if(!btnsEl)return;
-  const custom=![100,75,50,25].includes(billProrate);
-  btnsEl.innerHTML=[100,75,50,25].map(p=>`<div onclick="setBillProrate(${p})" style="flex:1;padding:8px 4px;background:${billProrate===p?'#1a1a3a':'var(--surface2)'};border:1.5px solid ${billProrate===p?'var(--blue)':'var(--border)'};border-radius:8px;font-family:var(--mono);font-size:13px;font-weight:700;color:${billProrate===p?'var(--blue)':'var(--text2)'};text-align:center;cursor:pointer;">${p}%</div>`).join('')+
+  const extraEl=document.getElementById('bdProrateButtonsExtra');
+  const presets=[100,75,50,25,125,150,175,200];
+  const custom=!presets.includes(billProrate);
+  const btn=p=>`<div onclick="setBillProrate(${p})" style="flex:1;padding:8px 4px;background:${billProrate===p?'#1a1a3a':'var(--surface2)'};border:1.5px solid ${billProrate===p?'var(--blue)':'var(--border)'};border-radius:8px;font-family:var(--mono);font-size:13px;font-weight:700;color:${billProrate===p?'var(--blue)':'var(--text2)'};text-align:center;cursor:pointer;">${p}%</div>`;
+  btnsEl.innerHTML=[100,75,50,25].map(btn).join('')+
   `<div onclick="promptCustomProrate()" style="padding:8px 4px;background:${custom?'#1a1a3a':'var(--surface2)'};border:1.5px solid ${custom?'var(--blue)':'var(--border)'};border-radius:8px;font-size:11px;font-weight:600;color:${custom?'var(--blue)':'var(--text3)'};text-align:center;cursor:pointer;min-width:50px;">${custom?billProrate+'%':'อื่นๆ'}</div>`;
+  if(extraEl)extraEl.innerHTML=[125,150,175,200].map(btn).join('');
 }
 
 function setBillProrate(pct){
@@ -1328,8 +1334,8 @@ function setBillProrate(pct){
 }
 
 function promptCustomProrate(){
-  const v=prompt('กรอกเปอร์เซ็นต์ (1-100):','50');
-  const n=parseInt(v);if(!isNaN(n)&&n>0&&n<=100)setBillProrate(n);
+  const v=prompt('กรอกเปอร์เซ็นต์ (1-300):',String(billProrate));
+  const n=parseInt(v);if(!isNaN(n)&&n>0&&n<=300)setBillProrate(n);
 }
 
 function getRentByRoom(roomCode){
@@ -1396,7 +1402,7 @@ function computeBillCalc(code,curMonth,pct){
 
 function updateBillItems(){
   const b=DATA.bills[billDetailIdx];if(!b)return;
-  const isProrate=billProrate<100;
+  const isProrate=billProrate!==100;
   const pctF=billProrate/100;
   let rent,water,elec,common,car,moto,discount,elecOld,elecNew,elecUnits,waterOld,waterNew,waterUnits,hasMeterDetail;
   if(billPreview){
