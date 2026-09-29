@@ -1453,13 +1453,26 @@ function updateBillItems(){
       <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--purple);">-฿${fmt(discount)}</span>
     </div>`;
   }
+  const cleaningFee=fmtN(b['ค่าใช้จ่ายเพิ่มเติม']);
+  if(cleaningFee>0){
+    html+=`<div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--surface2);gap:8px;border-left:3px solid var(--yellow);">
+      <span style="font-size:12px;color:var(--yellow);flex:1;"><i class="ti ti-sparkles" style="font-size:14px;vertical-align:-2px;"></i> ค่าใช้จ่ายเพิ่มเติม</span>
+      <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--yellow);">฿${fmt(cleaningFee)}</span>
+      <button onclick="setCleaningFee()" style="background:transparent;border:none;color:var(--text2);font-size:14px;cursor:pointer;padding:2px 4px;">✏️</button>
+      <button onclick="removeCleaningFee()" style="background:transparent;border:none;color:var(--red);font-size:14px;cursor:pointer;padding:2px 4px;">✕</button>
+    </div>`;
+  }else{
+    html+=`<div style="padding:10px 14px;"><button onclick="setCleaningFee()" style="width:100%;padding:8px;background:transparent;border:1px dashed var(--border2);color:var(--yellow);border-radius:8px;font-family:var(--font);font-size:12px;cursor:pointer;">+ เพิ่มค่าใช้จ่ายเพิ่มเติม</button></div>`;
+  }
   document.getElementById('bdItemsCard').innerHTML=html;
   updateBillTotal();
 }
 
 function updateBillTotal(){
   const b=DATA.bills[billDetailIdx];if(!b)return;
-  const total=billPreview?billPreview.total:fmtN(b['รวม']);
+  // Saved 'รวม' already includes the cleaning fee (folded in by setCleaningFee/removeCleaningFee);
+  // computeBillCalc doesn't know about it, so a pending prorate preview needs it added back on top.
+  const total=billPreview?billPreview.total+fmtN(b['ค่าใช้จ่ายเพิ่มเติม']):fmtN(b['รวม']);
   const totalHtml=`<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--surface2);"><span style="font-size:13px;font-weight:700;color:var(--text);">รวมทั้งสิ้น</span><span style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--yellow);">฿${fmt(total)}</span></div>`;
   document.getElementById('bdTotalCard').innerHTML=totalHtml;
 }
@@ -1472,6 +1485,7 @@ async function saveBillEdits(){
   const b=DATA.bills[billDetailIdx];if(!b)return;
   if(!billPreview){alert('กรุณากด "ดึงข้อมูลล่าสุด" ก่อนบันทึก');return;}
   const data=billCalcToSaveData(billPreview);
+  data['รวม']=data['รวม']+fmtN(b['ค่าใช้จ่ายเพิ่มเติม']);
   const btn=document.getElementById('bdSaveBtn');const orig=btn.innerHTML;
   btn.innerHTML='⏳ กำลังบันทึก...';btn.disabled=true;
   try{
@@ -1485,6 +1499,40 @@ async function saveBillEdits(){
       renderDashboard();
     }else{alert('บันทึกไม่สำเร็จ: '+(res.error||''));btn.innerHTML=orig;btn.disabled=false;}
   }catch(e){alert('เกิดข้อผิดพลาด: '+e.message);btn.innerHTML=orig;btn.disabled=false;}
+}
+
+async function setCleaningFee(){
+  const b=DATA.bills[billDetailIdx];if(!b)return;
+  const cur=fmtN(b['ค่าใช้จ่ายเพิ่มเติม']);
+  const v=prompt('ค่าใช้จ่ายเพิ่มเติม (บาท):',cur?String(cur):'500');
+  if(v===null)return;
+  const n=parseFloat(v);
+  if(isNaN(n)||n<0){alert('กรอกจำนวนเงินไม่ถูกต้อง');return;}
+  const baseTotal=billPreview?billPreview.total:fmtN(b['รวม']);
+  const data=billPreview?billCalcToSaveData(billPreview):{};
+  data['ค่าใช้จ่ายเพิ่มเติม']=n;
+  data['รวม']=Math.max(0,baseTotal-cur+n);
+  try{
+    const res=await apiPost({sheet:'บิลรายเดือน',action:'update_row',rowIndex:billDetailIdx+1,data});
+    if(res.success){Object.assign(b,data);billPreview=null;updateBillItems();renderBillsTable();renderDashboard();}
+    else alert('บันทึกไม่สำเร็จ: '+(res.error||''));
+  }catch(e){alert('เกิดข้อผิดพลาด: '+e.message);}
+}
+
+async function removeCleaningFee(){
+  const b=DATA.bills[billDetailIdx];if(!b)return;
+  const cur=fmtN(b['ค่าใช้จ่ายเพิ่มเติม']);
+  if(!cur)return;
+  if(!confirm('ลบค่าใช้จ่ายเพิ่มเติมออกจากบิลนี้?'))return;
+  const baseTotal=billPreview?billPreview.total:fmtN(b['รวม']);
+  const data=billPreview?billCalcToSaveData(billPreview):{};
+  data['ค่าใช้จ่ายเพิ่มเติม']=0;
+  data['รวม']=Math.max(0,baseTotal-cur);
+  try{
+    const res=await apiPost({sheet:'บิลรายเดือน',action:'update_row',rowIndex:billDetailIdx+1,data});
+    if(res.success){Object.assign(b,data);billPreview=null;updateBillItems();renderBillsTable();renderDashboard();}
+    else alert('บันทึกไม่สำเร็จ: '+(res.error||''));
+  }catch(e){alert('เกิดข้อผิดพลาด: '+e.message);}
 }
 
 async function generateBills(){
