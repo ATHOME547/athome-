@@ -886,6 +886,17 @@ function loadCachedData(){
 
 function saveCachedData(){try{localStorage.setItem(DATA_CACHE_KEY,JSON.stringify(DATA));}catch{}}
 
+function revealDashAnd(renderFn){
+  document.getElementById('loadingIndicator').style.display='none';
+  document.getElementById('dashContent').style.display='block';
+  // Chart.js reads the canvas's on-screen size when it's constructed. Calling that in the same
+  // tick as switching the container from display:none to block can read it before the browser
+  // has actually laid it out (0×0) — especially on mobile — leaving charts blank until something
+  // else (like switching pages) forces a re-render. Wait a couple of frames first so layout has
+  // definitely happened.
+  requestAnimationFrame(()=>requestAnimationFrame(renderFn));
+}
+
 async function loadData(){
   // Stale-while-revalidate: show the last successfully loaded copy instantly (from a prior
   // session) while quietly re-fetching fresh data in the background, instead of always making
@@ -893,13 +904,13 @@ async function loadData(){
   const hadCache=loadCachedData();
   document.getElementById('fetchWarning').innerHTML='';
   if(hadCache){
-    document.getElementById('loadingIndicator').style.display='none';
-    document.getElementById('dashContent').style.display='block';
     populateFilters();
-    renderDashboard();
-    if(typeof initMeterMonth==='function')initMeterMonth();
-    if(document.getElementById('page-bill-detail').classList.contains('active')&&billDetailIdx>=0&&DATA.bills[billDetailIdx])openBillDetail(billDetailIdx);
-    if(document.getElementById('page-bills').classList.contains('active'))renderBillsTable();
+    revealDashAnd(()=>{
+      renderDashboard();
+      if(typeof initMeterMonth==='function')initMeterMonth();
+      if(document.getElementById('page-bill-detail').classList.contains('active')&&billDetailIdx>=0&&DATA.bills[billDetailIdx])openBillDetail(billDetailIdx);
+      if(document.getElementById('page-bills').classList.contains('active'))renderBillsTable();
+    });
   }else{
     document.getElementById('loadingIndicator').style.display='flex';
     document.getElementById('dashContent').style.display='none';
@@ -911,12 +922,12 @@ async function loadData(){
     DATA={rooms,tenants,bills,meter,extraIncome,maintenance};dataLoaded=true;
     saveCachedData();
     populateFilters();
-    document.getElementById('loadingIndicator').style.display='none';
-    document.getElementById('dashContent').style.display='block';
-    renderDashboard();
-    if(typeof initMeterMonth==='function')initMeterMonth();
-    if(document.getElementById('page-bill-detail').classList.contains('active')&&billDetailIdx>=0&&DATA.bills[billDetailIdx])openBillDetail(billDetailIdx);
-    if(document.getElementById('page-bills').classList.contains('active'))renderBillsTable();
+    revealDashAnd(()=>{
+      renderDashboard();
+      if(typeof initMeterMonth==='function')initMeterMonth();
+      if(document.getElementById('page-bill-detail').classList.contains('active')&&billDetailIdx>=0&&DATA.bills[billDetailIdx])openBillDetail(billDetailIdx);
+      if(document.getElementById('page-bills').classList.contains('active'))renderBillsTable();
+    });
   }catch(e){
     if(!hadCache&&DATA.rooms.length===0)dataLoaded=false;
     document.getElementById('loadingIndicator').style.display='none';
