@@ -765,7 +765,14 @@ async function fetchWithTimeout(url,options,timeoutMs){
 // POST ข้อมูลไปยัง Apps Script
 async function apiPost(payload){
   const res=await fetchWithTimeout(API_URL,{method:'POST',body:JSON.stringify(payload)},15000);
-  return await res.json();
+  const json=await res.json();
+  // ทุกจุดที่บันทึกข้อมูลสำเร็จ (จ่ายเงิน, ลบบิล, แก้บิล, บันทึกมิเตอร์ ฯลฯ) ต้องอัปเดตแคชในเครื่องด้วย
+  // ไม่งั้นแคชจะค้างเป็นข้อมูลเก่าก่อนบันทึก แล้วโผล่กลับมาโชว์ผิดตอนเปิดแอปครั้งถัดไป (เช่น จ่ายบิลแล้วแต่เปิดมาเจอ "ยังไม่จ่าย")
+  // ใช้ setTimeout สั้น ๆ ให้โค้ดที่เรียก apiPost แก้ DATA ในเครื่อง (Object.assign/.push แบบ synchronous) เสร็จก่อน ค่อย snapshot ลงแคช
+  if(json&&json.success&&payload&&['update_row','append_row','delete_row','update_settings'].includes(payload.action)){
+    setTimeout(()=>{if(typeof saveCachedData==='function')saveCachedData();},50);
+  }
+  return json;
 }
 let DATA={rooms:[],tenants:[],bills:[],meter:[],extraIncome:[],maintenance:[]};
 let charts={};
