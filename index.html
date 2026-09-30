@@ -998,8 +998,10 @@ function getMonths(){return[...new Set(DATA.bills.map(b=>b['เดือน/ป�
 function populateFilters(){
   initBillMonth();
   const msel=document.getElementById('meterRoom');
-  msel.innerHTML='<option value="">— เลือกห้อง —</option>';
-  [...new Set(DATA.meter.map(m=>m['ห้องเลขที่']))].filter(Boolean).sort().forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;msel.appendChild(o);});
+  if(msel){
+    msel.innerHTML='<option value="">— เลือกห้อง —</option>';
+    [...new Set(DATA.meter.map(m=>m['ห้องเลขที่']))].filter(Boolean).sort().forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;msel.appendChild(o);});
+  }
 }
 
 function getFilteredBills(){return billCurrentMonth?DATA.bills.filter(b=>(b['เดือน/ปี']||b[Object.keys(b)[0]])===billCurrentMonth):DATA.bills;}
