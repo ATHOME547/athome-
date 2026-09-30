@@ -1567,72 +1567,57 @@ async function generateBills(){
   const rMoto=parseFloat(rates.r_moto)||0;
   const curMonth=billCurrentMonth;
   const prevMonth=calcPrevMonth(curMonth);
-  let bills=DATA.bills.filter(b=>(b['เดือน/ปี']||'')===curMonth);
   const btn=document.getElementById('generateBillBtn');
   btn.innerHTML='⏳ กำลังดำเนินการ...';btn.disabled=true;
-  let updated=0;let created=0;let errors=0;
-  if(!bills.length){
-    const activeTenants=DATA.tenants.filter(t=>!t['วันที่ออก']&&t['ห้องเลขที่']);
-    for(const t of activeTenants){
-      const code=t['ห้องเลขที่']||'';
-      const nc=normCode(code);
-      const room=DATA.rooms.find(r=>normCode(r['ห้องเลขที่'])===nc);
-      const rent=getRentByRoom(code);
-      const curMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===curMonth);
-      const prevMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===prevMonth);
-      let waterUnits=0,elecUnits=0,elecOld=0,elecNew=0,waterOld=0,waterNew=0;
-      if(curMeter&&prevMeter){
-        waterOld=parseFloat(prevMeter['หน่วยน้ำ'])||0;waterNew=parseFloat(curMeter['หน่วยน้ำ'])||0;waterUnits=calcMeterDiff(waterNew,waterOld);
-        elecOld=parseFloat(prevMeter['หน่วยไฟ'])||0;elecNew=parseFloat(curMeter['หน่วยไฟ'])||0;elecUnits=calcMeterDiff(elecNew,elecOld);
-      }
-      const waterCost=Math.round(waterUnits*rWater);
-      const elecCost=Math.round(elecUnits*rElec);
-      const nCars=(t['รถยนต์ล็อก']||'').split(',').filter(Boolean).length;
-      const nMotos=(t['จักยานยนต์ล็อก']||'').split(',').filter(Boolean).length;
-      const carCost=nCars*rCar;const motoCost=nMotos*rMoto;
-      const pDiscount=parseFloat(t['ส่วนลดส่วนบุคคล'])||0;
-      const total=Math.max(0,rent+waterCost+elecCost+rCommon+carCost+motoCost-pDiscount);
-      const newRow={'เดือน/ปี':curMonth,'ห้องเลขที่':code,'รหัสผู้เช่า':t['รหัสผู้เช่า']||'','ค่าเช่า':rent,'ค่าน้ำ':waterCost,'ค่าไฟ':elecCost,'ค่าส่วนกลาง':rCommon,'ค่าจอดรถยนต์':carCost,'ค่าจอดมอเตอร์':motoCost,'ส่วนลด':pDiscount,'รวม':total,'สถานะ':'ค้างชำระ','หน่วยไฟเก่า':elecOld,'หน่วยไฟใหม่':elecNew,'หน่วยน้ำเก่า':waterOld,'หน่วยน้ำใหม่':waterNew};
-      try{
-        const res=await apiPost({sheet:'บิลรายเดือน',action:'append_row',data:newRow});
-        if(res.success){DATA.bills.push(newRow);created++;}
-        else errors++;
-      }catch{errors++;}
+  let updated=0,created=0,errors=0;
+  const errorRooms=[];
+  // One pass over active tenants, per-tenant create-or-update — not "any bill exists this
+  // month? then only ever update" — so a room that failed to save (mobile drop mid-request)
+  // stays retryable by pressing the button again, instead of being stuck missing forever.
+  const activeTenants=DATA.tenants.filter(t=>!t['วันที่ออก']&&t['ห้องเลขที่']);
+  for(const t of activeTenants){
+    const code=t['ห้องเลขที่']||'';
+    const nc=normCode(code);
+    const rent=getRentByRoom(code);
+    const curMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===curMonth);
+    const prevMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===prevMonth);
+    let waterUnits=0,elecUnits=0,elecOld=0,elecNew=0,waterOld=0,waterNew=0;
+    if(curMeter&&prevMeter){
+      waterOld=parseFloat(prevMeter['หน่วยน้ำ'])||0;waterNew=parseFloat(curMeter['หน่วยน้ำ'])||0;waterUnits=calcMeterDiff(waterNew,waterOld);
+      elecOld=parseFloat(prevMeter['หน่วยไฟ'])||0;elecNew=parseFloat(curMeter['หน่วยไฟ'])||0;elecUnits=calcMeterDiff(elecNew,elecOld);
     }
-  }else{
-    for(const b of bills){
-      const code=b['ห้องเลขที่']||'';
-      const nc=normCode(code);
-      const room=DATA.rooms.find(r=>normCode(r['ห้องเลขที่'])===nc);
-      const tenant=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===nc&&!t['วันที่ออก']);
-      const rent=getRentByRoom(code);
-      const curMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===curMonth);
-      const prevMeter=DATA.meter.find(m=>normCode(m['ห้องเลขที่'])===nc&&(m['เดือน/ปี']||'')===prevMonth);
-      let waterUnits=0,elecUnits=0,elecOld=0,elecNew=0,waterOld=0,waterNew=0;
-      if(curMeter&&prevMeter){
-        waterOld=parseFloat(prevMeter['หน่วยน้ำ'])||0;waterNew=parseFloat(curMeter['หน่วยน้ำ'])||0;waterUnits=calcMeterDiff(waterNew,waterOld);
-        elecOld=parseFloat(prevMeter['หน่วยไฟ'])||0;elecNew=parseFloat(curMeter['หน่วยไฟ'])||0;elecUnits=calcMeterDiff(elecNew,elecOld);
-      }
-      const waterCost=Math.round(waterUnits*rWater);
-      const elecCost=Math.round(elecUnits*rElec);
-      const nCars=tenant?(tenant['รถยนต์ล็อก']||'').split(',').filter(Boolean).length:0;
-      const nMotos=tenant?(tenant['จักยานยนต์ล็อก']||'').split(',').filter(Boolean).length:0;
-      const carCost=nCars*rCar;const motoCost=nMotos*rMoto;
-      const pDiscount=tenant?parseFloat(tenant['ส่วนลดส่วนบุคคล'])||0:0;
-      const total=Math.max(0,rent+waterCost+elecCost+rCommon+carCost+motoCost-pDiscount);
-      const data={'ค่าเช่า':rent,'ค่าน้ำ':waterCost,'ค่าไฟ':elecCost,'ค่าส่วนกลาง':rCommon,'ค่าจอดรถยนต์':carCost,'ค่าจอดมอเตอร์':motoCost,'ส่วนลด':pDiscount,'รวม':total,'หน่วยไฟเก่า':elecOld,'หน่วยไฟใหม่':elecNew,'หน่วยน้ำเก่า':waterOld,'หน่วยน้ำใหม่':waterNew};
-      const rowIndex=DATA.bills.indexOf(b)+1;
+    const waterCost=Math.round(waterUnits*rWater);
+    const elecCost=Math.round(elecUnits*rElec);
+    const nCars=(t['รถยนต์ล็อก']||'').split(',').filter(Boolean).length;
+    const nMotos=(t['จักยานยนต์ล็อก']||'').split(',').filter(Boolean).length;
+    const carCost=nCars*rCar;const motoCost=nMotos*rMoto;
+    const pDiscount=parseFloat(t['ส่วนลดส่วนบุคคล'])||0;
+    const total=Math.max(0,rent+waterCost+elecCost+rCommon+carCost+motoCost-pDiscount);
+
+    const existing=DATA.bills.find(b=>normCode(b['ห้องเลขที่'])===nc&&(b['เดือน/ปี']||'')===curMonth);
+    let ok=false;
+    for(let attempt=0;attempt<2&&!ok;attempt++){
       try{
-        const res=await apiPost({sheet:'บิลรายเดือน',action:'update_row',rowIndex,data});
-        if(res.success){Object.assign(b,data);updated++;}
-        else errors++;
-      }catch{errors++;}
+        if(existing){
+          const data={'ค่าเช่า':rent,'ค่าน้ำ':waterCost,'ค่าไฟ':elecCost,'ค่าส่วนกลาง':rCommon,'ค่าจอดรถยนต์':carCost,'ค่าจอดมอเตอร์':motoCost,'ส่วนลด':pDiscount,'รวม':total,'หน่วยไฟเก่า':elecOld,'หน่วยไฟใหม่':elecNew,'หน่วยน้ำเก่า':waterOld,'หน่วยน้ำใหม่':waterNew};
+          const rowIndex=DATA.bills.indexOf(existing)+1;
+          const res=await apiPost({sheet:'บิลรายเดือน',action:'update_row',rowIndex,data});
+          if(res.success){Object.assign(existing,data);ok=true;if(attempt===0)updated++;}
+        }else{
+          const newRow={'เดือน/ปี':curMonth,'ห้องเลขที่':code,'รหัสผู้เช่า':t['รหัสผู้เช่า']||'','ค่าเช่า':rent,'ค่าน้ำ':waterCost,'ค่าไฟ':elecCost,'ค่าส่วนกลาง':rCommon,'ค่าจอดรถยนต์':carCost,'ค่าจอดมอเตอร์':motoCost,'ส่วนลด':pDiscount,'รวม':total,'สถานะ':'ค้างชำระ','หน่วยไฟเก่า':elecOld,'หน่วยไฟใหม่':elecNew,'หน่วยน้ำเก่า':waterOld,'หน่วยน้ำใหม่':waterNew};
+          const res=await apiPost({sheet:'บิลรายเดือน',action:'append_row',data:newRow});
+          if(res.success){DATA.bills.push(newRow);ok=true;if(attempt===0)created++;}
+        }
+      }catch{}
     }
+    if(!ok){errors++;errorRooms.push(code);}
   }
-  const msg=created?`✅ สร้างบิล ${created} ห้อง`:`✅ คำนวณเสร็จ ${updated} ห้อง`;
-  btn.innerHTML=msg+(errors?` (ผิดพลาด ${errors})`:'');
+  const parts=[];
+  if(created)parts.push('สร้างใหม่ '+created+' ห้อง');
+  if(updated)parts.push('อัปเดต '+updated+' ห้อง');
+  btn.innerHTML=(parts.length?'✅ '+parts.join(' · '):'ไม่มีการเปลี่ยนแปลง')+(errors?` — ❌ ห้องที่ผิดพลาด: ${errorRooms.join(', ')} (ลองกดใหม่)`:'');
   btn.disabled=false;
-  setTimeout(()=>{renderBillsTable();renderDashboard();},2000);
+  setTimeout(()=>{renderBillsTable();renderDashboard();},errors?5000:2000);
 }
 
 function renderTenants(){
@@ -1963,41 +1948,47 @@ async function saveAllMeter(){
   
   const curMonth=getCurrentMonthStr();
   let success=0,failed=0;
-  
+  const failedCodes=[];
+
   for(const key of keys){
     const[type,code]=key.split('_');
     const newVal=parseFloat(entries[key]);
     if(isNaN(newVal))continue;
-    
+
     const prev=getPrevMonthMeter(code);
     const curEntry=getCurrentEntry(code);
     const oldCol=type==='water'?'มิเตอร์น้ำเก่า':'มิเตอร์ไฟเก่า';
     const newCol=type==='water'?'มิเตอร์น้ำใหม่':'มิเตอร์ไฟใหม่';
     const unitCol=type==='water'?'หน่วยน้ำ':'หน่วยไฟ';
-    
+
     let oldVal=curEntry?curEntry[oldCol]:(prev?(prev[newCol]||prev[oldCol]):0);
     if(!oldVal)oldVal=0;
     const units=newVal-parseFloat(oldVal);
-    
-    try{
-      if(curEntry){
-        // update existing row
-        const rowIdx=DATA.meter.indexOf(curEntry)+1;
-        const res=await apiPost({sheet:'มิเตอร์',action:'update_row',rowIndex:rowIdx,data:{[oldCol]:oldVal,[newCol]:newVal,[unitCol]:units}});
-        if(res.success){success++;curEntry[oldCol]=oldVal;curEntry[newCol]=newVal;curEntry[unitCol]=units;}else failed++;
-      }else{
-        // append new row
-        const newRow={'เดือน/ปี':curMonth,'ห้องเลขที่':code,[oldCol]:oldVal,[newCol]:newVal,[unitCol]:units};
-        const res=await apiPost({sheet:'มิเตอร์',action:'append_row',data:newRow});
-        if(res.success){success++;DATA.meter.push(newRow);}else failed++;
-      }
-    }catch{failed++;}
+
+    // Mobile connections drop mid-request more often than wifi — retry once before giving up,
+    // rather than silently losing the entry.
+    let ok=false;
+    for(let attempt=0;attempt<2&&!ok;attempt++){
+      try{
+        if(curEntry){
+          const rowIdx=DATA.meter.indexOf(curEntry)+1;
+          const res=await apiPost({sheet:'มิเตอร์',action:'update_row',rowIndex:rowIdx,data:{[oldCol]:oldVal,[newCol]:newVal,[unitCol]:units}});
+          if(res.success){curEntry[oldCol]=oldVal;curEntry[newCol]=newVal;curEntry[unitCol]=units;ok=true;}
+        }else{
+          const newRow={'เดือน/ปี':curMonth,'ห้องเลขที่':code,[oldCol]:oldVal,[newCol]:newVal,[unitCol]:units};
+          const res=await apiPost({sheet:'มิเตอร์',action:'append_row',data:newRow});
+          if(res.success){DATA.meter.push(newRow);ok=true;}
+        }
+      }catch{}
+    }
+    if(ok){success++;delete entries[key];}else{failed++;failedCodes.push(code);}
   }
-  
+
   btn.innerHTML='<i class="ti ti-cloud-upload" style="font-size:16px;vertical-align:-2px;"></i> บันทึกทั้งหมด';btn.disabled=false;
-  METER_STATE.entries={};
-  toast.textContent=failed?`✅ บันทึก ${success} · ❌ ผิดพลาด ${failed}`:`✅ บันทึกสำเร็จ ${success} ห้อง`;
-  toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),3500);
+  // Only clear entries that actually saved — failed ones stay filled in so re-pressing
+  // "บันทึกทั้งหมด" retries just those rooms instead of forcing the admin to retype everything.
+  toast.textContent=failed?`✅ บันทึก ${success} · ❌ ห้องที่ผิดพลาด: ${failedCodes.join(', ')} (ลองกดบันทึกอีกครั้ง)`:`✅ บันทึกสำเร็จ ${success} ห้อง`;
+  toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),failed?7000:3500);
   renderMeterEntry();
 }
 
