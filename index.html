@@ -749,9 +749,22 @@ const SHEET_ID='1K7z_OzHJDfi0__9-gfdFQkXRVAo_zmFi9MQIl6MtU8A';
 const BASE=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=`;
 const API_URL='https://script.google.com/macros/s/AKfycbwg3d-g84_8xRAVbzWuPzyAtZwPvjR2KN2s0ASnr86c3dvp2Nf-On_WpXEuVuvnw5FN6w/exec';
 
+// A stalled mobile connection can leave a plain fetch() pending for minutes before the browser
+// gives up on its own — no error, no timeout, just stuck. Abort it ourselves after 15s so
+// callers' retry logic actually gets a chance to run instead of hanging forever.
+async function fetchWithTimeout(url,options,timeoutMs){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs||15000);
+  try{
+    return await fetch(url,{...(options||{}),signal:controller.signal});
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
 // POST ข้อมูลไปยัง Apps Script
 async function apiPost(payload){
-  const res=await fetch(API_URL,{method:'POST',body:JSON.stringify(payload)});
+  const res=await fetchWithTimeout(API_URL,{method:'POST',body:JSON.stringify(payload)},15000);
   return await res.json();
 }
 let DATA={rooms:[],tenants:[],bills:[],meter:[],extraIncome:[],maintenance:[]};
@@ -848,13 +861,17 @@ function showPage(name){
 function filterByMonth(){if(dataLoaded){renderBillsTable();}}
 
 /* ---- FETCH DATA ---- */
-async function fetchSheet(name){
+async function fetchSheet(name,month){
   // ใช้ Apps Script แทน gviz เพื่อให้ได้ข้อมูลครบทุกคอลัมน์
   // เน็ตมือถือหลุดกลางคันได้บ่อยกว่าไวไฟ — ลองใหม่ 1 ครั้งก่อนจะถือว่าโหลดไม่สำเร็จจริง ๆ
+  // month (optional): "MM/YYYY" เดือนเดียว หรือหลายเดือนคั่นด้วย , ให้ Apps Script กรองให้ก่อนส่งกลับมา —
+  // ใช้กับ บิลรายเดือน/มิเตอร์ ที่ข้อมูลสะสมเยอะขึ้นทุกเดือน จะได้ไม่ต้องดึงประวัติทั้งหมดทุกครั้ง
   let lastErr;
   for(let attempt=0;attempt<2;attempt++){
     try{
-      const res=await fetch(API_URL+'?sheet='+encodeURIComponent(name)+'&action=get');
+      let url=API_URL+'?sheet='+encodeURIComponent(name)+'&action=get';
+      if(month)url+='&month='+encodeURIComponent(month);
+      const res=await fetchWithTimeout(url,null,15000);
       const json=await res.json();
       if(json.error)throw new Error(json.error);
       return json.rows||[];
@@ -897,6 +914,38 @@ function revealDashAnd(renderFn){
   requestAnimationFrame(()=>requestAnimationFrame(renderFn));
 }
 
+// บิลรายเดือน/มิเตอร์ สะสมข้อมูลเพิ่มทุกเดือนไม่มีที่สิ้นสุด — ถ้าดึงย้อนหลังทั้งหมดทุกครั้งที่เปิดแอป
+// จะช้าลงเรื่อย ๆ ตามเวลาที่ผ่านไป จึงดึงแค่ช่วง 12 เดือนล่าสุดตอนเปิดแอป (พอสำหรับกราฟ 6 เดือน/ทั้งปีในหน้าภาพรวม)
+// ส่วนเดือนที่เก่ากว่านั้น ค่อยดึงเพิ่มแบบเจาะจงเมื่อเลื่อนไปดูจริง ๆ ผ่าน ensureMonthLoaded()
+function getRecentMonths(n){
+  const out=[];
+  const d=new Date();
+  let m=d.getMonth()+1,y=d.getFullYear()+543;
+  for(let i=0;i<n;i++){
+    out.push(String(m).padStart(2,'0')+'/'+y);
+    m--;if(m<1){m=12;y--;}
+  }
+  return out;
+}
+const loadedBillMonths=new Set();
+const loadedMeterMonths=new Set();
+
+async function ensureMonthLoaded(kind,month){
+  if(!month)return;
+  const set=kind==='bills'?loadedBillMonths:loadedMeterMonths;
+  if(set.has(month))return;
+  const sheetName=kind==='bills'?'บิลรายเดือน':'มิเตอร์';
+  const target=kind==='bills'?DATA.bills:DATA.meter;
+  try{
+    const rows=await fetchSheet(sheetName,month);
+    rows.forEach(r=>{
+      const dup=target.some(x=>normCode(x['ห้องเลขที่']||'')===normCode(r['ห้องเลขที่']||'')&&(x['เดือน/ปี']||'')===(r['เดือน/ปี']||''));
+      if(!dup)target.push(r);
+    });
+    set.add(month);
+  }catch(e){console.warn('โหลดเดือน '+month+' ('+kind+') ไม่สำเร็จ:',e.message);}
+}
+
 async function loadData(){
   // Stale-while-revalidate: show the last successfully loaded copy instantly (from a prior
   // session) while quietly re-fetching fresh data in the background, instead of always making
@@ -916,7 +965,10 @@ async function loadData(){
     document.getElementById('dashContent').style.display='none';
   }
   try{
-    const[rooms,tenants,bills,meter,extraIncome]=await Promise.all([fetchSheet('ห้องพัก'),fetchSheet('ผู้เช่า'),fetchSheet('บิลรายเดือน'),fetchSheet('มิเตอร์'),fetchSheet('รายได้เสริม')]);
+    const recentMonths=getRecentMonths(12).join(',');
+    const[rooms,tenants,bills,meter,extraIncome]=await Promise.all([fetchSheet('ห้องพัก'),fetchSheet('ผู้เช่า'),fetchSheet('บิลรายเดือน',recentMonths),fetchSheet('มิเตอร์',recentMonths),fetchSheet('รายได้เสริม')]);
+    loadedBillMonths.clear();loadedMeterMonths.clear();
+    getRecentMonths(12).forEach(m=>{loadedBillMonths.add(m);loadedMeterMonths.add(m);});
     let maintenance=[];
     try{maintenance=await fetchSheet('ซ่อมบำรุง');}catch(e){console.warn('ซ่อมบำรุง sheet not found yet:',e.message);}
     DATA={rooms,tenants,bills,meter,extraIncome,maintenance};dataLoaded=true;
@@ -982,21 +1034,29 @@ function getAllMonths(){
 }
 function initBillMonth(){
   if(!billCurrentMonth){
-    const billMonths=sortMonths([...new Set(DATA.bills.map(b=>b['เดือน/ปี']||''))].filter(Boolean));
-    billCurrentMonth=billMonths.length?billMonths[billMonths.length-1]:'';
+    billCurrentMonth=thaiMonthYear(new Date());
   }
-  if(!billCurrentMonth){const all=getAllMonths();if(all.length)billCurrentMonth=all[all.length-1];}
   const el=document.getElementById('billMonthDisplay');
   if(el)el.textContent=formatMonthFull(billCurrentMonth);
 }
-function changeBillMonth(dir){
-  const months=getAllMonths();if(!months.length)return;
-  let idx=months.indexOf(billCurrentMonth);
-  if(idx===-1)idx=months.length-1;
-  idx+=dir;if(idx<0)idx=0;if(idx>=months.length)idx=months.length-1;
-  billCurrentMonth=months[idx];
+// ไม่ผูกกับ getAllMonths() แล้ว — เลื่อนได้ทุกเดือนอิสระเหมือนหน้ามิเตอร์ ถ้าเดือนที่เลื่อนไปยังไม่เคยโหลด
+// (เกินช่วง 12 เดือนล่าสุดที่ดึงมาตอนเปิดแอป) จะไปดึงข้อมูลเดือนนั้นเพิ่มให้อัตโนมัติ
+async function changeBillMonth(dir){
+  const parts=(billCurrentMonth||thaiMonthYear(new Date())).split('/');
+  let m=(parseInt(parts[0])||1)+dir,y=parseInt(parts[1])||(new Date().getFullYear()+543);
+  if(m<1){m=12;y--;}
+  if(m>12){m=1;y++;}
+  billCurrentMonth=String(m).padStart(2,'0')+'/'+y;
   const el=document.getElementById('billMonthDisplay');if(el)el.textContent=formatMonthFull(billCurrentMonth);
   renderBillsTable();
+  if(!loadedBillMonths.has(billCurrentMonth)||!loadedMeterMonths.has(billCurrentMonth)){
+    await Promise.all([
+      ensureMonthLoaded('bills',billCurrentMonth),
+      ensureMonthLoaded('meter',billCurrentMonth),
+      ensureMonthLoaded('meter',calcPrevMonth(billCurrentMonth))
+    ]);
+    renderBillsTable();
+  }
 }
 
 function _oldRenderDashboard_removed(){/* replaced by new renderDashboard in dashboard v2 section */}
@@ -2065,7 +2125,7 @@ function updateMonthDisplay(){
   if(el)el.textContent=`${THAI_MONTHS_FULL[m-1]} ${y}`;
 }
 
-function changeMonth(delta){
+async function changeMonth(delta){
   const msel=document.getElementById('meterEntryMonthSel');
   const ysel=document.getElementById('meterEntryYearSel');
   let m=parseInt(msel.value)+delta;
@@ -2076,6 +2136,12 @@ function changeMonth(delta){
   ysel.value=y;
   updateMonthDisplay();
   renderMeterEntry();
+  const target=String(m).padStart(2,'0')+'/'+y;
+  const prev=calcPrevMonth(target);
+  if(!loadedMeterMonths.has(target)||!loadedMeterMonths.has(prev)){
+    await Promise.all([ensureMonthLoaded('meter',target),ensureMonthLoaded('meter',prev)]);
+    renderMeterEntry();
+  }
 }
 
 
