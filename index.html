@@ -850,10 +850,17 @@ function filterByMonth(){if(dataLoaded){renderBillsTable();}}
 /* ---- FETCH DATA ---- */
 async function fetchSheet(name){
   // ใช้ Apps Script แทน gviz เพื่อให้ได้ข้อมูลครบทุกคอลัมน์
-  const res=await fetch(API_URL+'?sheet='+encodeURIComponent(name)+'&action=get');
-  const json=await res.json();
-  if(json.error)throw new Error(json.error);
-  return json.rows||[];
+  // เน็ตมือถือหลุดกลางคันได้บ่อยกว่าไวไฟ — ลองใหม่ 1 ครั้งก่อนจะถือว่าโหลดไม่สำเร็จจริง ๆ
+  let lastErr;
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const res=await fetch(API_URL+'?sheet='+encodeURIComponent(name)+'&action=get');
+      const json=await res.json();
+      if(json.error)throw new Error(json.error);
+      return json.rows||[];
+    }catch(e){lastErr=e;}
+  }
+  throw lastErr;
 }
 
 function doRefresh(){
@@ -863,15 +870,46 @@ function doRefresh(){
   setTimeout(()=>{if(btn)btn.style.transform='';},500);
 }
 
+const DATA_CACHE_KEY='athome_data_cache';
+
+function loadCachedData(){
+  try{
+    const s=localStorage.getItem(DATA_CACHE_KEY);
+    if(!s)return false;
+    const c=JSON.parse(s);
+    if(!c||!c.rooms)return false;
+    DATA={rooms:c.rooms||[],tenants:c.tenants||[],bills:c.bills||[],meter:c.meter||[],extraIncome:c.extraIncome||[],maintenance:c.maintenance||[]};
+    dataLoaded=true;
+    return true;
+  }catch{return false;}
+}
+
+function saveCachedData(){try{localStorage.setItem(DATA_CACHE_KEY,JSON.stringify(DATA));}catch{}}
+
 async function loadData(){
-  document.getElementById('loadingIndicator').style.display='flex';
-  document.getElementById('dashContent').style.display='none';
+  // Stale-while-revalidate: show the last successfully loaded copy instantly (from a prior
+  // session) while quietly re-fetching fresh data in the background, instead of always making
+  // the user stare at a blank loading screen — especially painful on a slow mobile connection.
+  const hadCache=loadCachedData();
   document.getElementById('fetchWarning').innerHTML='';
+  if(hadCache){
+    document.getElementById('loadingIndicator').style.display='none';
+    document.getElementById('dashContent').style.display='block';
+    populateFilters();
+    renderDashboard();
+    if(typeof initMeterMonth==='function')initMeterMonth();
+    if(document.getElementById('page-bill-detail').classList.contains('active')&&billDetailIdx>=0&&DATA.bills[billDetailIdx])openBillDetail(billDetailIdx);
+    if(document.getElementById('page-bills').classList.contains('active'))renderBillsTable();
+  }else{
+    document.getElementById('loadingIndicator').style.display='flex';
+    document.getElementById('dashContent').style.display='none';
+  }
   try{
     const[rooms,tenants,bills,meter,extraIncome]=await Promise.all([fetchSheet('ห้องพัก'),fetchSheet('ผู้เช่า'),fetchSheet('บิลรายเดือน'),fetchSheet('มิเตอร์'),fetchSheet('รายได้เสริม')]);
     let maintenance=[];
     try{maintenance=await fetchSheet('ซ่อมบำรุง');}catch(e){console.warn('ซ่อมบำรุง sheet not found yet:',e.message);}
     DATA={rooms,tenants,bills,meter,extraIncome,maintenance};dataLoaded=true;
+    saveCachedData();
     populateFilters();
     document.getElementById('loadingIndicator').style.display='none';
     document.getElementById('dashContent').style.display='block';
@@ -880,11 +918,16 @@ async function loadData(){
     if(document.getElementById('page-bill-detail').classList.contains('active')&&billDetailIdx>=0&&DATA.bills[billDetailIdx])openBillDetail(billDetailIdx);
     if(document.getElementById('page-bills').classList.contains('active'))renderBillsTable();
   }catch(e){
-    if(DATA.rooms.length===0)dataLoaded=false;
+    if(!hadCache&&DATA.rooms.length===0)dataLoaded=false;
     document.getElementById('loadingIndicator').style.display='none';
     document.getElementById('dashContent').style.display='block';
     console.warn('Load error:',e.message);
-    if(dataLoaded)renderDashboard();
+    if(dataLoaded){
+      renderDashboard();
+      if(hadCache)document.getElementById('fetchWarning').innerHTML='<div class="warn-banner">อัปเดตข้อมูลล่าสุดไม่สำเร็จ กำลังแสดงข้อมูลเก่าที่เคยโหลดไว้ — <a href="javascript:void(0)" onclick="loadData()">กดที่นี่เพื่อลองใหม่</a></div>';
+    }else{
+      document.getElementById('fetchWarning').innerHTML='<div class="warn-banner">โหลดข้อมูลไม่สำเร็จ (เน็ตอาจไม่เสถียร) — <a href="javascript:void(0)" onclick="loadData()">กดที่นี่เพื่อลองใหม่</a></div>';
+    }
   }
 }
 
