@@ -1065,11 +1065,15 @@ function getAllMonths(){
   return sortMonths([...new Set([...fromBills,...fromMeter])].filter(Boolean));
 }
 function initBillMonth(){
-  if(!billCurrentMonth){
-    billCurrentMonth=thaiMonthYear(new Date());
+  // Open on the latest month that already has bills (e.g. still October until November's bills
+  // are generated). Only lock it in once data is loaded, so an early call doesn't pin today's month.
+  if(!billCurrentMonth&&dataLoaded){
+    const key=s=>{const p=String(s).split('/');return parseInt(p[1])*12+parseInt(p[0]);};
+    const billed=[...new Set(DATA.bills.map(b=>b['เดือน/ปี']).filter(s=>/^\d{1,2}\/\d{4}$/.test(String(s||'').trim())))];
+    billCurrentMonth=billed.length?billed.reduce((a,b)=>key(b)>key(a)?b:a):thaiMonthYear(new Date());
   }
   const el=document.getElementById('billMonthDisplay');
-  if(el)el.textContent=formatMonthFull(billCurrentMonth);
+  if(el)el.textContent=formatMonthFull(billCurrentMonth||thaiMonthYear(new Date()));
 }
 // ไม่ผูกกับ getAllMonths() แล้ว — เลื่อนได้ทุกเดือนอิสระเหมือนหน้ามิเตอร์ ถ้าเดือนที่เลื่อนไปยังไม่เคยโหลด
 // (เกินช่วง 12 เดือนล่าสุดที่ดึงมาตอนเปิดแอป) จะไปดึงข้อมูลเดือนนั้นเพิ่มให้อัตโนมัติ
