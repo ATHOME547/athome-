@@ -1014,7 +1014,30 @@ function populateFilters(){
 function getFilteredBills(){return billCurrentMonth?DATA.bills.filter(b=>(b['เดือน/ปี']||b[Object.keys(b)[0]])===billCurrentMonth):DATA.bills;}
 function fmt(n){const x=parseFloat((n+'').replace(/,/g,''));return isNaN(x)?'0':x.toLocaleString('th-TH');}
 function fmtN(n){const x=parseFloat((n+'').replace(/,/g,''));return isNaN(x)?0:x;}
-function getTName(room){const t=DATA.tenants.find(t=>t['ห้องเลขที่']===room&&!t['วันที่ออก']);return t?t['ชื่อ-นามสกุล']:'—';}
+// Tenant who held the room in billMonth ('MM/YYYY'). A tenant still owns the bill of the month
+// they move out in — the room only counts as vacant from the following month.
+function findBillTenant(code,billMonth){
+  const nc=normCode(code);
+  const rows=DATA.tenants.filter(t=>normCode(t['ห้องเลขที่'])===nc);
+  const active=rows.find(t=>!t['วันที่ออก'])||null;
+  const p=String(billMonth||'').split('/');if(p.length!==2)return active;
+  let by=parseInt(p[1]);if(by>2500)by-=543;
+  const bIdx=by*12+parseInt(p[0])-1;
+  let leaving=null,leavingIdx=Infinity;
+  rows.forEach(t=>{
+    if(!t['วันที่ออก'])return;
+    const d=parseThai(String(t['วันที่ออก']));if(!d||isNaN(d))return;
+    const oIdx=d.getFullYear()*12+d.getMonth();
+    if(oIdx>=bIdx&&oIdx<leavingIdx){leaving=t;leavingIdx=oIdx;}
+  });
+  return leaving||active;
+}
+function getTName(room,bill){
+  const id=bill&&bill['รหัสผู้เช่า'];
+  let t=id?DATA.tenants.find(x=>x['รหัสผู้เช่า']===id&&normCode(x['ห้องเลขที่'])===normCode(room)):null;
+  if(!t)t=findBillTenant(room,bill?bill['เดือน/ปี']:billCurrentMonth);
+  return t?t['ชื่อ-นามสกุล']:'—';
+}
 
 let billCurrentMonth='';
 let billDetailIdx=-1;
@@ -1087,8 +1110,7 @@ function renderBillsTable(){
   const paid=bills.filter(b=>b['สถานะ']==='ชำระแล้ว').length;
   const unpaid=bills.length-paid;
   const hasMeterData=DATA.meter.some(m=>(m['เดือน/ปี']||'')===billCurrentMonth);
-  const emptyBills=bills.filter(b=>!b['รวม']||b['รวม']===''||b['รวม']==='0'||parseFloat(b['รวม'])===0).length;
-  const genBtn=document.getElementById('generateBillBtn');
+  const emptyBills=bills.filter(b=>!b['รวม']||b['รวม']===''||b['รวม']==='0'||parseFloat(b['รวม'])===0).length;  const genBtn=document.getElementById('generateBillBtn');
   if(genBtn){
     if(bills.length===0&&hasMeterData){genBtn.style.display='block';genBtn.innerHTML='<i class="ti ti-bolt" style="font-size:16px;vertical-align:-2px;"></i> สร้างบิลเดือนนี้';}
     else if(emptyBills>0){genBtn.style.display='block';genBtn.innerHTML='<i class="ti ti-bolt" style="font-size:16px;vertical-align:-2px;"></i> คำนวณบิลจากมิเตอร์';}
@@ -1126,13 +1148,13 @@ function renderBillsTable(){
   allRooms.forEach(room=>{
     const code=room['ห้องเลขที่']||'';
     const b=bills.find(x=>normCode(x['ห้องเลขที่'])===normCode(code));
-    if(q&&!JSON.stringify(room).toLowerCase().includes(q)&&!getTName(code).toLowerCase().includes(q)&&!(b&&JSON.stringify(b).toLowerCase().includes(q)))return;
+    if(q&&!JSON.stringify(room).toLowerCase().includes(q)&&!getTName(code,b).toLowerCase().includes(q)&&!(b&&JSON.stringify(b).toLowerCase().includes(q)))return;
     const zone=code.trim().toUpperCase().charAt(0);
     if(zone!==lastZone){html+=`<div style="font-size:10px;font-weight:600;margin:10px 0 6px 2px;color:${zoneColors[zone]||'var(--text3)'};">${zoneLabels[zone]||'โซน '+zone}</div>`;lastZone=zone;}
-    const tenant=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===normCode(code)&&!t['วันที่ออก']);
+    const tenant=findBillTenant(code,billCurrentMonth);
     if(b){
       const globalIdx=DATA.bills.indexOf(b);
-      const name=getTName(code);
+      const name=getTName(code,b);
       const total=fmtN(b['รวม']);
       const pct=parsePctField(b['เปอร์เซ็นต์เดือนแรก']);
       const proTag=pct<100?`<span style="background:#1a1a3a;color:var(--blue);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;">ไม่เต็มเดือน ${pct}%</span>`:pct>100?`<span style="background:#3a1a1a;color:var(--red);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;flex-shrink:0;">ค่าใช้จ่ายเพิ่มเติม ${pct}%</span>`:'';
@@ -1176,7 +1198,7 @@ function openBillDetail(idx){
   const b=DATA.bills[idx];if(!b)return;
   billProrate=parsePctField(b['เปอร์เซ็นต์เดือนแรก']);
   const code=b['ห้องเลขที่']||'';
-  const name=getTName(code);
+  const name=getTName(code,b);
   const st=getBillStatusInfo(b);
   document.getElementById('bdRoomTag').textContent=code;
   document.getElementById('bdName').textContent=name;
@@ -1184,7 +1206,7 @@ function openBillDetail(idx){
   document.getElementById('bdStatusBadge').innerHTML=`<span style="background:${st.bg};color:${st.color};font-size:10px;padding:3px 8px;border-radius:20px;font-weight:600;">${st.label}</span>`;
   document.getElementById('bdVacantSection').style.display='none';
   document.getElementById('bdBillContent').style.display='block';
-  const tenant=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===normCode(code)&&!t['วันที่ออก']);
+  const tenant=findBillTenant(code,b['เดือน/ปี']);
   const moveIn=tenant?tenant['วันที่เข้าอยู่']:'';
   const billMonth=b['เดือน/ปี']||'';
   let isPartial=false,partialReason='';
@@ -1380,7 +1402,7 @@ async function sendLineBill(type){
   const code=b['ห้องเลขที่']||'';
   const month=b['เดือน/ปี']||'';
   const label=type==='receipt'?'ใบเสร็จ':'ใบแจ้งหนี้';
-  const name=getTName(code);
+  const name=getTName(code,b);
   if(!confirm('ส่ง'+label+'ห้อง '+code+' ('+name+') เดือน '+formatMonthFull(month)+' ทาง LINE ใช่หรือไม่?'))return;
   const btnId=type==='receipt'?'bdSendReceipt':'bdSendInvoice';
   const btn=document.getElementById(btnId);
@@ -1507,7 +1529,7 @@ function computeBillCalc(code,curMonth,pct){
   const rCommon=parseFloat(rates.r_common)||0;
   const rCar=parseFloat(rates.r_car)||0;
   const rMoto=parseFloat(rates.r_moto)||0;
-  const tenant=DATA.tenants.find(t=>normCode(t['ห้องเลขที่'])===normCode(code)&&!t['วันที่ออก']);
+  const tenant=findBillTenant(code,curMonth);
   const rentFull=getRentByRoom(code);
   const nCars=tenant?(tenant['รถยนต์ล็อก']||'').split(',').filter(Boolean).length:0;
   const nMotos=tenant?(tenant['จักยานยนต์ล็อก']||'').split(',').filter(Boolean).length:0;
@@ -1697,7 +1719,9 @@ async function generateBills(){
   // One pass over active tenants, per-tenant create-or-update — not "any bill exists this
   // month? then only ever update" — so a room that failed to save (mobile drop mid-request)
   // stays retryable by pressing the button again, instead of being stuck missing forever.
-  const activeTenants=DATA.tenants.filter(t=>!t['วันที่ออก']&&t['ห้องเลขที่']);
+  // One tenant per room for this month — includes someone who moves out during curMonth.
+  const activeTenants=[...new Set(DATA.tenants.filter(t=>t['ห้องเลขที่']).map(t=>normCode(t['ห้องเลขที่'])))]
+    .map(nc=>findBillTenant(nc,curMonth)).filter(Boolean);
   for(const t of activeTenants){
     const code=t['ห้องเลขที่']||'';
     const nc=normCode(code);
