@@ -3314,7 +3314,14 @@ function renderTdPayChart(tenantId,roomCode){
     const key=String(m).padStart(2,'0')+'/'+y;
     const monthBills=DATA.bills.filter(b=>(b['เดือน/ปี']||'')===key&&(tenantId?b['รหัสผู้เช่า']===tenantId:normCode(b['ห้องเลขที่'])===normCode(roomCode)));
     const isPaid=b=>b['สถานะ']&&b['สถานะ']!=='ค้างชำระ';
-    const dayOf=b=>parseInt((b['วันที่ชำระ']||'99').split('/')[0])||99;
+    // Day-of-month in the payment window (month after the bill). Paying within the bill month itself
+    // (e.g. 30/31 right when the bill is issued) counts as day 0; paying after that window counts as 99.
+    const dayOf=b=>{
+      const d=parseThai(String(b['วันที่ชำระ']||''));
+      if(!d||isNaN(d))return parseInt((b['วันที่ชำระ']||'99').split('/')[0])||99;
+      const diff=(d.getFullYear()*12+d.getMonth())-((y-543)*12+m); // 0 = month after the bill
+      return diff<0?0:diff===0?d.getDate():99;
+    };
     let color='var(--surface2)';let h=20;let tooltip='';
     const isCurMonth=(m===curM&&y===curY);
     const isPrevMonth=(i===1);
