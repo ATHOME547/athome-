@@ -476,16 +476,16 @@ if(sessionStorage.getItem('athome_auth')){document.addEventListener('DOMContentL
       <div style="display:flex;justify-content:center;margin-bottom:12px;"><div style="width:36px;height:4px;background:var(--border2);border-radius:2px;"></div></div>
       <div style="text-align:center;margin-bottom:16px;">
         <div style="margin-bottom:8px;"><i class="ti ti-home" style="font-size:40px;color:var(--text3);"></i></div>
-        <div style="font-size:16px;font-weight:700;">ยืนยันการย้ายออก</div>
+        <div id="moveOutTitle" style="font-size:16px;font-weight:700;">ยืนยันการย้ายออก</div>
         <div id="moveOutName" style="font-size:13px;color:var(--text2);margin-top:4px;"></div>
       </div>
       <div style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center;margin-bottom:16px;">
-        <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">วันที่ย้ายออก</div>
+        <div id="moveOutDateLabel" style="font-size:11px;color:var(--text2);margin-bottom:8px;">วันที่ย้ายออก</div>
         <input type="date" id="moveOutDate" style="background:var(--surface);border:1.5px solid var(--red);color:var(--red);padding:8px 12px;border-radius:8px;font-family:var(--mono);font-size:16px;font-weight:700;width:100%;box-sizing:border-box;">
       </div>
       <div style="display:flex;gap:10px;">
         <button onclick="closeMoveOutModal()" style="flex:1;padding:13px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);border-radius:10px;font-family:var(--font);font-size:14px;cursor:pointer;">ยกเลิก</button>
-        <button onclick="confirmMoveOut()" style="flex:2;padding:13px;background:var(--red);color:#fff;border:none;border-radius:10px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">ยืนยัน</button>
+        <button onclick="returnRoomCode?confirmReturnRoom():confirmMoveOut()" style="flex:2;padding:13px;background:var(--red);color:#fff;border:none;border-radius:10px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;">ยืนยัน</button>
       </div>
     </div>
   </div>
@@ -2888,7 +2888,8 @@ function renderTenantDetail(){
   const pastRooms=rooms.filter(r=>!!r['วันที่ออก']);
   const padLock=l=>String(parseInt((l||'').trim())||(l||'').trim()).padStart(2,'0');
 
-  const roomCardHtml=rooms.filter(r=>!r['วันที่ออก']).map((r,ri)=>{
+  const roomCardHtml=rooms.filter(r=>!r['วันที่ออก']).map(r=>{
+    const ri=rooms.indexOf(r); // index into the full findTenantRooms() list, which the lock editors use
     const roomInfo=DATA.rooms.find(x=>normCode(x['ห้องเลขที่'])===normCode(r['ห้องเลขที่']||''));
     const rent=roomInfo?getRentByRoom(r['ห้องเลขที่']):'—';
     const type=roomInfo?roomInfo['ประเภท']:'—';
@@ -2929,7 +2930,7 @@ function renderTenantDetail(){
   document.getElementById('tdVehCard').style.cssText='margin-bottom:12px;';
 
   // Payment chart
-  renderTdPayChart(t['ห้องเลขที่']||'');
+  renderTdPayChart(t['รหัสผู้เช่า']||'',t['ห้องเลขที่']||'');
 
   // Hide move out btn if already out
   const btn=document.getElementById('tdMoveOutBtn');
@@ -3135,17 +3136,31 @@ function editRoomAddLockInline(type,roomIdx){
   });
 }
 
-async function returnRoomInline(roomCode){
-  const rooms=findTenantRooms();
-  const r=rooms.find(x=>x['ห้องเลขที่']===roomCode);
-  if(!r)return;
+// Returning one room (e.g. to switch rooms) reuses the move-out modal for the date picker.
+let returnRoomCode='';
+function returnRoomInline(roomCode){
+  const t=findTenant();
+  if(!t)return;
+  returnRoomCode=roomCode;
+  document.getElementById('moveOutTitle').textContent='คืนห้อง '+roomCode;
+  document.getElementById('moveOutDateLabel').textContent='วันที่คืนห้อง (ช่องจอดของห้องนี้จะถูกล้าง)';
+  document.getElementById('moveOutName').textContent=t['ชื่อ-นามสกุล']||'—';
   const today=new Date();
-  const todayStr=formatDateThai(today);
-  if(!confirm('คืนห้อง '+roomCode+' วันที่ '+todayStr+' ใช่ไหม?'))return;
+  document.getElementById('moveOutDate').value=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  document.getElementById('moveOutModal').style.display='flex';
+}
+async function confirmReturnRoom(){
+  const dateVal=document.getElementById('moveOutDate').value;
+  if(!dateVal){alert('กรุณาเลือกวันที่');return;}
+  const r=findTenantRooms().find(x=>x['ห้องเลขที่']===returnRoomCode&&!x['วันที่ออก']);
+  if(!r){closeMoveOutModal();return;}
+  const dateStr=formatDateThai(new Date(dateVal));
+  const data={'วันที่ออก':dateStr,'รถยนต์ล็อก':'','จักยานยนต์ล็อก':''};
   try{
     const idx2=DATA.tenants.indexOf(r)+1;
-    const res=await apiPost({sheet:'ผู้เช่า',action:'update_row',rowIndex:idx2,data:{'วันที่ออก':todayStr}});
-    if(res.success){r['วันที่ออก']=todayStr;renderTenantDetail();renderTenants2();}
+    const res=await apiPost({sheet:'ผู้เช่า',action:'update_row',rowIndex:idx2,data});
+    if(res.success){Object.assign(r,data);closeMoveOutModal();renderTenantDetail();renderTenants2();}
+    else alert('บันทึกไม่สำเร็จ');
   }catch(e){alert('เกิดข้อผิดพลาด: '+e.message);}
 }
 
@@ -3284,7 +3299,9 @@ async function saveVeh(){
   }catch(e){alert('เกิดข้อผิดพลาด: '+e.message);}
 }
 
-function renderTdPayChart(roomCode){
+// Bills are matched by tenant ID so room switches / multi-room tenants show their own history.
+// A month with several bills is red if any is unpaid, otherwise colored by the latest payment day.
+function renderTdPayChart(tenantId,roomCode){
   const MONTHS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const now=new Date();
   const curM=now.getMonth()+1;const curY=now.getFullYear()+543;
@@ -3295,19 +3312,22 @@ function renderTdPayChart(roomCode){
     let m=curM-i;let y=curY;
     while(m<1){m+=12;y--;}
     const key=String(m).padStart(2,'0')+'/'+y;
-    const bill=DATA.bills.find(b=>normCode(b['ห้องเลขที่'])===normCode(roomCode)&&(b['เดือน/ปี']||'')===key);
+    const monthBills=DATA.bills.filter(b=>(b['เดือน/ปี']||'')===key&&(tenantId?b['รหัสผู้เช่า']===tenantId:normCode(b['ห้องเลขที่'])===normCode(roomCode)));
+    const isPaid=b=>b['สถานะ']&&b['สถานะ']!=='ค้างชำระ';
+    const dayOf=b=>parseInt((b['วันที่ชำระ']||'99').split('/')[0])||99;
     let color='var(--surface2)';let h=20;let tooltip='';
     const isCurMonth=(m===curM&&y===curY);
     const isPrevMonth=(i===1);
     const inGrace=isPrevMonth&&todayDay<=5;
-    if(bill&&bill['สถานะ']&&bill['สถานะ']!=='ค้างชำระ'){
-      const dayPaid=parseInt((bill['วันที่ชำระ']||'99').split('/')[0])||99;
+    if(monthBills.length&&monthBills.every(isPaid)){
+      const bill=monthBills.reduce((a,b)=>dayOf(b)>dayOf(a)?b:a);
+      const dayPaid=dayOf(bill);
       const payDisplay=(bill['วันที่ชำระ']||'').replace(/\/\d{4}(\s+\d{2}:\d{2})?$/,'');
       tooltip=payDisplay?'ชำระ '+payDisplay:'ชำระแล้ว';
       if(dayPaid<=5){color='var(--green)';h=70;good++;}
       else if(dayPaid<=15){color='var(--yellow)';h=45;ok++;}
       else{color='var(--red)';h=25;bad++;}
-    }else if(bill&&!isCurMonth&&!inGrace){color='var(--red)';h=25;bad++;tooltip='ค้างชำระ';}
+    }else if(monthBills.length&&!isCurMonth&&!inGrace){color='var(--red)';h=25;bad++;tooltip='ค้างชำระ'+(monthBills.length>1?' ('+monthBills.filter(b=>!isPaid(b)).map(b=>b['ห้องเลขที่']).join(', ')+')':'');}
     bars.push(`<div onclick="showPayBarTip(this,'${tooltip}')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;position:relative;">
       <div style="width:100%;height:${h}px;background:${color};border-radius:3px 3px 0 0;transition:opacity 0.1s;" onmouseenter="this.style.opacity='0.7'" onmouseleave="this.style.opacity='1'"></div>
       <div style="font-size:8px;color:var(--text3);">${MONTHS[m-1]}</div>
@@ -3334,13 +3354,15 @@ let moveOutTenantId='';
 function showMoveOutConfirm(){
   const t=findTenant();
   if(!t)return;
-  moveOutTenantId=currentTenantId;
+  moveOutTenantId=currentTenantId;returnRoomCode='';
+  document.getElementById('moveOutTitle').textContent='ยืนยันการย้ายออก';
+  document.getElementById('moveOutDateLabel').textContent='วันที่ย้ายออก';
   const today=new Date();
   document.getElementById('moveOutName').textContent=t['ชื่อ-นามสกุล']||'—';
   document.getElementById('moveOutDate').value=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   document.getElementById('moveOutModal').style.display='flex';
 }
-function closeMoveOutModal(){document.getElementById('moveOutModal').style.display='none';}
+function closeMoveOutModal(){document.getElementById('moveOutModal').style.display='none';returnRoomCode='';}
 async function confirmMoveOut(){
   const dateVal=document.getElementById('moveOutDate').value;
   if(!dateVal){alert('กรุณาเลือกวันที่');return;}
